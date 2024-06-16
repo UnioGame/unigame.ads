@@ -1,0 +1,26 @@
+{
+    "name": "levelplay.ads.demo",
+    "rootNamespace": "",
+    "references": [
+        "GUID:0c70dfc96397cc241a2ed4443e32aac4",
+        "GUID:f51ebe6a0ceec4240a699833d6309b23",
+        "GUID:8e4577c9194c10845984cf27eb974fd1",
+        "GUID:560b04d1a97f54a4e82edc0cbbb69285",
+        "GUID:a65a2ca71d4d1384d94d6db87a27b931"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [
+        {
+            "name": "com.unigame.coremodules",
+            "expression": "",
+            "define": "UNIOGAME"
+        }
+    ],
+    "noEngineReferences": false
+}

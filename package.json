@@ -1,0 +1,21 @@
+{
+    "name": "unigame.ads.levelplay",
+    "displayName": "UniGame LevelPlay Ads",
+    "author": { "name": "UnioGame" },
+    "version": "2024.0.0",
+    "unity": "2022.2",
+    "description": "Provides LevelPlay integration for Unity.",
+    "keywords": [ 
+        "levelplay", 
+        "ads", 
+        "rewarded"
+    ],
+    "license": "MIT",
+    "dependencies": 
+    {
+        "com.unigame.coremodules": "https://github.com/UnioGame/UniGame.CoreModules.git",
+        "com.cysharp.unitask": "https://github.com/Cysharp/UniTask.git?path=src/UniTask/Assets/Plugins/UniTask",
+        "com.annulusgames.unity-codegen": "https://github.com/AnnulusGames/UnityCodeGen.git?path=/Assets/UnityCodeGen",
+        "com.unity.services.levelplay": "8.1.0"
+    }
+}
