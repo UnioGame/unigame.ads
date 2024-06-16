@@ -24,7 +24,8 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
         private Dictionary<string,AdsShowResult> _awaitedRewards = new();
         private ReactiveCommand<AdsShowResult> _applyRewardedCommand = new();
         private Subject<AdsActionData> _adsAction = new();
-        private Dictionary<string, AdsPlacementId> _placements = new();
+        private Dictionary<string, AdsPlacementItem> _placements = new();
+        private Dictionary<PlacementAdsId, AdsPlacementItem> _idPlacements = new();
         
         public LevelPlayAdsService(LevelPlayAdsConfig config)
         {
@@ -34,9 +35,10 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
             _lastAdsReloadTime = -_reloadAdsInterval;
             _placementIds = config.placementIds;
 
-            foreach (var AdsPlacementId in _placementIds.Types)
+            foreach (var adsPlacementId in _placementIds.Types)
             {
-                _placements[AdsPlacementId.Name] = AdsPlacementId;
+                _placements[adsPlacementId.Name] = adsPlacementId;
+                _idPlacements[(PlacementAdsId)adsPlacementId.Id] = adsPlacementId;
             }
             
             if(_adsConfig.enableAds == false)
@@ -52,6 +54,24 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
         public virtual bool InterstitialAvailable => IronSource.Agent.isInterstitialReady();
 
         public IObservable<AdsActionData> AdsAction => _adsAction;
+
+        public async UniTask<AdsShowResult> Show(PlacementAdsId placementAdsId)
+        {
+            if (!_idPlacements.TryGetValue(placementAdsId, out var placementItem))
+            {
+                return new AdsShowResult
+                {
+                    Error = true,
+                    Message = LevelPlayMessages.PlacementNotFound,
+                    PlacementType = PlacementType.Rewarded,
+                    PlacementName = string.Empty,
+                    Rewarded = false,
+                };
+            }
+            
+            var showResult = await Show(placementItem.Name, PlacementType.Rewarded);
+            return showResult;
+        }
 
         public async UniTask<AdsShowResult> Show(string placeId, PlacementType type)
         {
@@ -84,7 +104,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
         
         public async UniTask<AdsShowResult> Show(PlacementType type)
         {
-            AdsPlacementId adsPlacementId = default;
+            AdsPlacementItem adsPlacementId = default;
             foreach (var placement in _placements)
             {
                 var placementValue = placement.Value;

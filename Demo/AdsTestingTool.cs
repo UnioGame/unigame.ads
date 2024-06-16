@@ -15,10 +15,10 @@ namespace Game.Sandbox.AdsCommands
 
         public Button showRewarded;
         public Button showInterstitial;
+        public Button validateIntegration;
         
-        public string rewardedPlacement = "rewardedVideo";
-        public string interstitialPlacement = "interstitial";
-        
+        public PlacementAdsId rewardedPlacement;
+        public PlacementAdsId interstitialPlacement;
         
         private bool _isInitialized;
         private ILifeTime _lifeTime;
@@ -40,17 +40,22 @@ namespace Game.Sandbox.AdsCommands
                 .Subscribe(_ => ShowInterstitial())
                 .AddTo(_lifeTime);
             
+            validateIntegration.onClick
+                .AsObservable()
+                .Subscribe(_ => adsController.ValidateIntegration())
+                .AddTo(_lifeTime);
+            
             _isInitialized = true;
         }
         
         public void ShowRewarded()
         {
-            _adsController.ShowRewardedAdAsync(string.Empty).Forget();
+            _adsController.Show(rewardedPlacement).Forget();
         }
         
         public void ShowInterstitial()
         {
-            _adsController.ShowInterstitialAdAsync(string.Empty).Forget();
+            _adsController.Show(interstitialPlacement).Forget();
         }
 
     }

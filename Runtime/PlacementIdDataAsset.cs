@@ -15,7 +15,7 @@
     public class PlacementIdDataAsset : ScriptableObject
     {
         [InlineProperty]
-        public List<AdsPlacementId> Types = new List<AdsPlacementId>();
+        public List<AdsPlacementItem> Types = new List<AdsPlacementItem>();
 
         #region IdGenerator
 
@@ -53,7 +53,7 @@
                     BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
                 if (typesField != null)
                 {
-                    var types = (List<AdsPlacementId>)typesField.GetValue(dataAsset);
+                    var types = (List<AdsPlacementItem>)typesField.GetValue(dataAsset);
                     foreach (var type in types)
                     {
                         var propertyName = type.Name.Replace(" ", "");

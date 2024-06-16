@@ -18,7 +18,7 @@ using UniModules.Editor;
 namespace Game.Runtime.Game.Liveplay.Ads.Runtime
 {
     [Serializable]
-    public struct AdsPlacementId
+    public struct AdsPlacementItem
     {
         public int Id;
         public string Name;
