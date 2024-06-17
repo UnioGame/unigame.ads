@@ -20,6 +20,8 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
         private bool _loadingAds;
         private PlacementIdDataAsset _placementIds;
         
+        private string _activePlacement = string.Empty;
+        private bool _isInProgress = new();
         private List<AdsShowResult> _rewardedHistory = new();
         private Dictionary<string,AdsShowResult> _awaitedRewards = new();
         private ReactiveCommand<AdsShowResult> _applyRewardedCommand = new();
@@ -29,6 +31,8 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
         
         public LevelPlayAdsService(LevelPlayAdsConfig config)
         {
+            Debug.Log($"ADS SERVICE: Created");
+            
             _adsConfig = config;
             _lifeTime = new LifeTimeDefinition();
             _reloadAdsInterval = config.reloadAdsInterval;
@@ -48,12 +52,19 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
             
             InitializeAsync().Forget();
         }
+
+        public void LoadAdsAction(AdsActionData actionData)
+        {
+            Debug.Log($"[Ads Service] Action: {actionData.PlacementName} {actionData.PlacementType} {actionData.Message} {actionData.ActionType}");
+        }
         
         public virtual bool RewardedAvailable => IronSource.Agent.isRewardedVideoAvailable();
 
         public virtual bool InterstitialAvailable => IronSource.Agent.isInterstitialReady();
 
         public IObservable<AdsActionData> AdsAction => _adsAction;
+        
+        public bool IsInProgress => _isInProgress;
 
         public async UniTask<AdsShowResult> Show(PlacementAdsId placementAdsId)
         {
@@ -75,6 +86,23 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
 
         public async UniTask<AdsShowResult> Show(string placeId, PlacementType type)
         {
+            Debug.Log($"ADS SERVICE: Show {placeId} {type}");
+
+            if (_isInProgress)
+            {
+                return new AdsShowResult()
+                {
+                    PlacementName = placeId,
+                    Rewarded = false,
+                    Error = true,
+                    Message = LevelPlayMessages.AdsAlreadyInProgress,
+                    PlacementType = type,
+                };
+            }
+
+            _isInProgress = true;
+            _activePlacement = placeId;
+            
             _adsAction.OnNext(new AdsActionData()
             {
                 PlacementName = placeId,
@@ -82,10 +110,18 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                 ActionType = PlacementActionType.Requested,
                 PlacementType =type,
             });
-            
-            IronSource.Agent.showRewardedVideo(placeId);
 
-            await UniTask.WaitWhile(() => _awaitedRewards.ContainsKey(placeId))
+            if (!IsPlacementAvailable(placeId))
+            {
+                AddPlacementResult(placeId,type,false,true,LevelPlayMessages.PlacementCapped);
+            }
+            else
+            {
+                ShowPlacement(placeId, type);
+            }
+            
+            await UniTask
+                .WaitWhile(() => _awaitedRewards.ContainsKey(placeId) == false)
                 .AttachExternalCancellation(_lifeTime.Token);
 
             var placementResult = _awaitedRewards[placeId];
@@ -93,12 +129,33 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
             Debug.Log($"Rewarded video result {placementResult.Rewarded} {placementResult.Message} {placementResult.PlacementName}");
             
             _awaitedRewards.Remove(placeId);
-
+            _isInProgress = false;
+            
             return placementResult;
         }
 
+        public void ShowPlacement(string placeId, PlacementType type)
+        {
+            Debug.Log($"ADS SERVICE: Show {placeId} : {type}");
+            
+            switch (type)
+            {
+                case PlacementType.Rewarded:
+                    ShowRewardedVideo(placeId);
+                    break;
+                case PlacementType.Interstitial:
+                    IronSource.Agent.showInterstitial(placeId);
+                    break;
+                case PlacementType.Banner:
+                    AddPlacementResult(placeId,type,false,true,LevelPlayMessages.PlacementCapped);
+                    break;
+            }
+        }
+        
         public void ValidateIntegration()
         {
+            Debug.Log($"ADS SERVICE: ValidateIntegration");
+
             IronSource.Agent.validateIntegration();
         }
         
@@ -146,9 +203,9 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
         
         public bool IsPlacementAvailable(string placementName)
         {
-            if(_placements.TryGetValue(placementName,out var AdsPlacementId) == false)
+            if(_placements.TryGetValue(placementName,out var adsPlacementId) == false)
                 return false;
-            var placementType = AdsPlacementId.Type;
+            var placementType = adsPlacementId.Type;
             
             switch (placementType)
             {
@@ -215,7 +272,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
 
             IronSource.Agent.shouldTrackNetworkState (_adsConfig.shouldTrackNetworkState);
             
-            Debug.Log($"[Ads] IronSource initialized {isInitialized}");
+            Debug.Log($"[Ads Service] initialized {isInitialized}");
 
             if (_adsConfig.validateIntegration)
                 ValidateIntegration();
@@ -228,12 +285,27 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                 .AttachExternalCancellation(_lifeTime.Token)
                 .Forget();
         }
+
+        private void AddPlacementResult(string placeId, PlacementType type,bool rewarded, bool error = false,string message = "")
+        {
+            var result = new AdsShowResult
+            {
+                Error = error,
+                Message = message,
+                PlacementType = type,
+                PlacementName = placeId,
+                Rewarded = rewarded,
+            };
+            _awaitedRewards[placeId] = result;
+        }
         
         private void SubscribeToEvents()
         {
             Observable.EveryApplicationPause()
                 .Subscribe(x => IronSource.Agent.onApplicationPause(x))
                 .AddTo(_lifeTime);
+
+            _adsAction.Subscribe(LoadAdsAction).AddTo(_lifeTime);
             
             IronSourceEvents.onSdkInitializationCompletedEvent += SdkInitializationCompletedEvent;
             
@@ -301,7 +373,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
         {
             _adsAction.OnNext(new AdsActionData()
             {
-                PlacementName = adInfo.adUnit,
+                PlacementName = _activePlacement,
                 Message = String.Empty,
                 ActionType = PlacementActionType.Available,
                 PlacementType = PlacementType.Rewarded,
@@ -328,7 +400,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
         {
             _adsAction.OnNext(new AdsActionData()
             {
-                PlacementName = adInfo.adUnit,
+                PlacementName = _activePlacement,
                 Message = string.Empty,
                 ActionType = PlacementActionType.Opened,
                 PlacementType = PlacementType.Rewarded,
@@ -343,7 +415,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
             if(!_awaitedRewards.TryGetValue(placement,out var result))
             {
                 var rewardedResult = new AdsShowResult { 
-                    PlacementName = adInfo.adUnit, 
+                    PlacementName = _activePlacement, 
                     Rewarded = false,
                     Error = false,
                     Message = LevelPlayMessages.RewardedPlacementCapped
@@ -353,7 +425,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
             
             _adsAction.OnNext(new AdsActionData()
             {
-                PlacementName = adInfo.adUnit,
+                PlacementName = _activePlacement,
                 Message = string.Empty,
                 ActionType = PlacementActionType.Closed,
                 PlacementType = PlacementType.Rewarded,
@@ -390,7 +462,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
         {
             _adsAction.OnNext(new AdsActionData()
             {
-                PlacementName = adInfo.adUnit,
+                PlacementName = _activePlacement,
                 ErrorCode = error.getErrorCode(),
                 Message = error.getDescription(),
                 ActionType = PlacementActionType.Failed,
@@ -407,7 +479,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
         {
             _adsAction.OnNext(new AdsActionData()
             {
-                PlacementName = adInfo.adUnit,
+                PlacementName = _activePlacement,
                 Message = string.Empty,
                 ActionType = PlacementActionType.Clicked,
                 PlacementType = PlacementType.Rewarded,
@@ -420,7 +492,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
         {
             _adsAction.OnNext(new AdsActionData()
             {
-                PlacementName = adInfo.adUnit,
+                PlacementName = _activePlacement,
                 Message = adInfo.adUnit,
                 ErrorCode = 0,
                 ActionType = PlacementActionType.Available,
@@ -448,7 +520,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
         {
             _adsAction.OnNext(new AdsActionData()
             {
-                PlacementName = adInfo.adUnit,
+                PlacementName = _activePlacement,
                 Message = string.Empty,
                 ActionType = PlacementActionType.Opened,
                 PlacementType = PlacementType.Interstitial,
@@ -460,7 +532,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
         {
             _adsAction.OnNext(new AdsActionData()
             {
-                PlacementName = adInfo.adUnit,
+                PlacementName = _activePlacement,
                 Message = string.Empty,
                 ActionType = PlacementActionType.Clicked,
                 PlacementType = PlacementType.Interstitial,
@@ -471,7 +543,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
         {
             _adsAction.OnNext(new AdsActionData()
             {
-                PlacementName = adInfo.adUnit,
+                PlacementName = _activePlacement,
                 Message = ironSourceError.getDescription(),
                 ActionType = PlacementActionType.Failed,
                 PlacementType = PlacementType.Interstitial,
@@ -484,7 +556,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
         {
             _adsAction.OnNext(new AdsActionData()
             {
-                PlacementName = adInfo.adUnit,
+                PlacementName = _activePlacement,
                 Message = string.Empty,
                 ActionType = PlacementActionType.Closed,
                 PlacementType = PlacementType.Interstitial,
@@ -498,7 +570,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
         {
             _adsAction.OnNext(new AdsActionData()
             {
-                PlacementName = adInfo.adUnit,
+                PlacementName = _activePlacement,
                 Message = string.Empty,
                 ActionType = PlacementActionType.Rewarded,
                 PlacementType = PlacementType.Interstitial,

@@ -32,17 +32,17 @@ namespace Game.Sandbox.AdsCommands
             
             showRewarded.onClick
                 .AsObservable()
-                .Subscribe(_ => ShowRewarded())
+                .Subscribe(ShowRewarded)
                 .AddTo(_lifeTime);
                 
             showInterstitial.onClick
                 .AsObservable()
-                .Subscribe(_ => ShowInterstitial())
+                .Subscribe(ShowInterstitial)
                 .AddTo(_lifeTime);
             
             validateIntegration.onClick
                 .AsObservable()
-                .Subscribe(_ => adsController.ValidateIntegration())
+                .Subscribe(ValidateIntegration)
                 .AddTo(_lifeTime);
             
             _isInitialized = true;
@@ -50,13 +50,20 @@ namespace Game.Sandbox.AdsCommands
         
         public void ShowRewarded()
         {
+            Debug.Log("ADS TEST: Show Rewarded");
             _adsController.Show(rewardedPlacement).Forget();
         }
         
         public void ShowInterstitial()
         {
+            Debug.Log("ADS TEST: Show Interstitial");
             _adsController.Show(interstitialPlacement).Forget();
         }
 
+        public void ValidateIntegration()
+        {
+            Debug.Log("ADS TEST: ValidateIntegration");
+            _adsController.ValidateIntegration();
+        }
     }
 }
