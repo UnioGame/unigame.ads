@@ -15,13 +15,20 @@
     "precompiledReferences": [],
     "autoReferenced": true,
     "defineConstraints": [
-        "USE_ZENJECT"
+        "USE_ZENJECT",
+        "UNIOGAME",
+        "LEVEL_PLAY"
     ],
     "versionDefines": [
         {
             "name": "com.unigame.coremodules",
             "expression": "",
             "define": "UNIOGAME"
+        },
+        {
+            "name": "com.unity.services.levelplay",
+            "expression": "",
+            "define": "LEVEL_PLAY"
         }
     ],
     "noEngineReferences": false
