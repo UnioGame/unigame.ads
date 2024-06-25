@@ -16,7 +16,6 @@
     "autoReferenced": true,
     "defineConstraints": [
         "USE_ZENJECT",
-        "UNIOGAME",
         "LEVEL_PLAY"
     ],
     "versionDefines": [
