@@ -126,8 +126,6 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
 
             var placementResult = _awaitedRewards[placeId];
             
-            Debug.Log($"Rewarded video result {placementResult.Rewarded} {placementResult.Message} {placementResult.PlacementName}");
-            
             _awaitedRewards.Remove(placeId);
             _isInProgress = false;
             
@@ -204,14 +202,20 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
         public bool IsPlacementAvailable(string placementName)
         {
             if(_placements.TryGetValue(placementName,out var adsPlacementId) == false)
+            {
+                Debug.Log($"Placement haven't {placementName}");
                 return false;
+            }
             var placementType = adsPlacementId.Type;
             
             switch (placementType)
             {
                 case PlacementType.Rewarded:
+                    {
+                        Debug.Log($"Rewarded available: {RewardedAvailable} & Capped: {IronSource.Agent.isRewardedVideoPlacementCapped(placementName)}");
                     return RewardedAvailable &&
                            IronSource.Agent.isRewardedVideoPlacementCapped(placementName) == false;
+                    }
                 case PlacementType.Interstitial:
                     return InterstitialAvailable;
             }
@@ -296,6 +300,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                 PlacementName = placeId,
                 Rewarded = rewarded,
             };
+
             _awaitedRewards[placeId] = result;
         }
         
@@ -358,11 +363,15 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
             
             IronSource.Agent.showRewardedVideo(placeId);
         }
-        
+
         private void ApplyRewardedCommand(AdsShowResult result)
         {
             _rewardedHistory.Add(result);
-            _awaitedRewards[result.PlacementName] = result;
+
+            if (_awaitedRewards.ContainsKey(result.PlacementName))
+                return;
+            else
+                _awaitedRewards.Add(result.PlacementName, result);
         }
         
         /************* RewardedVideo AdInfo Delegates *************/
