@@ -46,7 +46,7 @@
             {
                 writer.WriteLine($"namespace {namespaceName}");
                 writer.WriteLine("{");
-                writer.WriteLine("    public partial struct PlacementAdsId");
+                writer.WriteLine("    public struct PlacementAdsIds");
                 writer.WriteLine("    {");
 
                 var typesField = typeof(PlacementIdDataAsset).GetField("Types",

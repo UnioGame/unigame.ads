@@ -15,13 +15,14 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
         private LifeTimeDefinition _lifeTime;
         private LevelPlayAdsConfig _adsConfig;
         private ReactiveValue<bool> _isInitialized = new();
-        private float _reloadAdsInterval;
-        private float _lastAdsReloadTime;
-        private bool _loadingAds;
         private PlacementIdDataAsset _placementIds;
         
         private string _activePlacement = string.Empty;
-        private bool _isInProgress = new();
+        private bool _isInProgress;
+        private float _reloadAdsInterval;
+        private float _lastAdsReloadTime;
+        private bool _loadingAds;
+        
         private List<AdsShowResult> _rewardedHistory = new();
         private Dictionary<string,AdsShowResult> _awaitedRewards = new();
         private ReactiveCommand<AdsShowResult> _applyRewardedCommand = new();
@@ -45,8 +46,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                 _idPlacements[(PlacementAdsId)adsPlacementId.Id] = adsPlacementId;
             }
             
-            if(_adsConfig.enableAds == false)
-                return;
+            if(_adsConfig.enableAds == false) return;
             
             SubscribeToEvents();
             
@@ -55,7 +55,10 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
 
         public void LoadAdsAction(AdsActionData actionData)
         {
-            Debug.Log($"[Ads Service] Action: {actionData.PlacementName} {actionData.PlacementType} {actionData.Message} {actionData.ActionType}");
+            IronSource.Agent.loadRewardedVideo();
+
+            var debugMessage = $"[Ads Service] Action: {actionData.PlacementName} {actionData.PlacementType} {actionData.Message} {actionData.ActionType}";
+            Debug.Log(debugMessage);
         }
         
         public virtual bool RewardedAvailable => IronSource.Agent.isRewardedVideoAvailable();
