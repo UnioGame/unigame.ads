@@ -17,13 +17,13 @@
     "precompiledReferences": [],
     "autoReferenced": true,
     "defineConstraints": [
-        "LEVEL_PLAY"
+        "UNITY_LEVEL_PLAY"
     ],
     "versionDefines": [
         {
             "name": "com.unity.services.levelplay",
             "expression": "",
-            "define": "LEVEL_PLAY"
+            "define": "UNITY_LEVEL_PLAY"
         }
     ],
     "noEngineReferences": false
