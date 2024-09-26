@@ -1,5 +1,5 @@
 {
-    "name": "game.levelplay.ads.runtime",
+    "name": "game.ads.common",
     "rootNamespace": "",
     "references": [
         "GUID:0c70dfc96397cc241a2ed4443e32aac4",
@@ -8,8 +8,7 @@
         "GUID:8e4577c9194c10845984cf27eb974fd1",
         "GUID:a0b431bd9232ee0439a3722ec36414ed",
         "GUID:560b04d1a97f54a4e82edc0cbbb69285",
-        "GUID:2796129a6c23eb84a8181f62bf7332f1",
-        "GUID:ef6a070b35104daebb10cf465963fe42"
+        "GUID:2796129a6c23eb84a8181f62bf7332f1"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
@@ -17,15 +16,5 @@
     "overrideReferences": false,
     "precompiledReferences": [],
     "autoReferenced": true,
-    "defineConstraints": [
-        "UNITY_LEVEL_PLAY"
-    ],
-    "versionDefines": [
-        {
-            "name": "com.unity.services.levelplay",
-            "expression": "",
-            "define": "UNITY_LEVEL_PLAY"
-        }
-    ],
     "noEngineReferences": false
 }

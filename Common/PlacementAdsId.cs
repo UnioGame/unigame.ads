@@ -1,30 +1,12 @@
-﻿using System;
-
-using System.Collections.Generic;
-using Sirenix.OdinInspector;
-using UnityEngine;
-
-using System;
-using System.Collections.Generic;
-using Sirenix.OdinInspector;
-using UnityEngine;
-using System.Linq;
-using UnityEngine.Serialization;
-
-#if UNITY_EDITOR
-using UniModules.Editor;
-#endif
-
 namespace Game.Runtime.Game.Liveplay.Ads.Runtime
 {
-    [Serializable]
-    public struct AdsPlacementItem
-    {
-        public int Id;
-        public string Name;
-        public PlacementType Type;
-    }
-    
+    using System;
+    using System.Collections.Generic;
+    using System.Linq;
+    using Sirenix.OdinInspector;
+    using UniModules.Editor;
+    using UnityEngine;
+
     [Serializable]
     [ValueDropdown("@Game.Runtime.Game.Liveplay.Ads.Runtime.PlacementAdsId.GetPlacementIds()", IsUniqueList = true, DropdownTitle = "PlacementId")]
     public partial struct PlacementAdsId
