@@ -268,6 +268,8 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
 
         private async UniTask InitializeAsync()
         {
+            Debug.Log($"[Ads Service] initialization started");
+            
             IronSource.Agent.init (_adsConfig.LivePlayAppKey);
             
             var isInitialized = await _isInitialized
