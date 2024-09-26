@@ -4,8 +4,11 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
     using System.Collections.Generic;
     using System.Linq;
     using Sirenix.OdinInspector;
-    using UniModules.Editor;
     using UnityEngine;
+
+#if UNITY_EDITOR
+    using UniModules.Editor;
+#endif
 
     [Serializable]
     [ValueDropdown("@Game.Runtime.Game.Liveplay.Ads.Runtime.PlacementAdsId.GetPlacementIds()", IsUniqueList = true, DropdownTitle = "PlacementId")]

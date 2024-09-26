@@ -12,7 +12,6 @@ namespace Game.Sandbox.AdsCommands
 
     public class AdsTestingTool : MonoBehaviour
     {
-
         public Button showRewarded;
         public Button showInterstitial;
         public Button validateIntegration;
