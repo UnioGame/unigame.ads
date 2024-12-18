@@ -2,6 +2,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
 {
     using System;
     using Sirenix.OdinInspector;
+    
     [Serializable]
     public class AdmobAdsConfig
     {

@@ -12,7 +12,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
 
     [Serializable]
     [ValueDropdown("@Game.Runtime.Game.Liveplay.Ads.Runtime.PlacementAdsId.GetPlacementIds()", IsUniqueList = true, DropdownTitle = "PlacementId")]
-    public partial struct PlacementAdsId
+    public struct PlacementAdsId
     {
         [SerializeField]
         public int value;

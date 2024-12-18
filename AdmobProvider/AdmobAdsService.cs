@@ -5,11 +5,13 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
     using System.Collections.Generic;
     using Cysharp.Threading.Tasks;
     using GoogleMobileAds.Api;
+    using UniGame.Core.Runtime;
     using UniModules.UniCore.Runtime.DataFlow;
     using UniModules.UniCore.Runtime.Extension;
     using UniModules.UniGame.Core.Runtime.Rx;
     using UniRx;
     
+    [Serializable]
     public class AdmobAdsService : IAdsService
     {
         private LifeTimeDefinition _lifeTime;
@@ -55,11 +57,15 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
             
             InitializeAsync().Forget();
         }
+        
+        public ILifeTime LifeTime => _lifeTime;
+        
         public void LoadAdsAction(AdsActionData actionData)
         {
             Debug.Log("Don't support preload admob ads, must using concrete unitId");
             return;
         }
+        
         public async UniTask<bool> LoadRewardedAd(string placementId)
         {
             if (_rewardedAdCache != null)
@@ -151,7 +157,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                 return new AdsShowResult
                 {
                     Error = true,
-                    Message = LevelPlayMessages.PlacementNotFound,
+                    Message = AdsMessages.PlacementNotFound,
                     PlacementType = PlacementType.Rewarded,
                     PlacementName = string.Empty,
                     Rewarded = false,
@@ -172,7 +178,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                     PlacementName = placeId,
                     Rewarded = false,
                     Error = true,
-                    Message = LevelPlayMessages.AdsAlreadyInProgress,
+                    Message = AdsMessages.AdsAlreadyInProgress,
                     PlacementType = type,
                 };
             }
@@ -190,7 +196,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
 
             if (!IsPlacementAvailable(placeId))
             {
-                AddPlacementResult(placeId,type,false,true,LevelPlayMessages.PlacementCapped);
+                AddPlacementResult(placeId,type,false,true,AdsMessages.PlacementCapped);
             }
             else
             {
@@ -221,7 +227,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                     ShowInterstitialVideo(placeId).Forget();
                     break;
                 case PlacementType.Banner:
-                    AddPlacementResult(placeId,type,false,true,LevelPlayMessages.PlacementCapped);
+                    AddPlacementResult(placeId,type,false,true,AdsMessages.PlacementCapped);
                     break;
             }
         }
@@ -244,7 +250,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                 return new AdsShowResult
                 {
                     Error = true,
-                    Message = LevelPlayMessages.PlacementNotFound,
+                    Message = AdsMessages.PlacementNotFound,
                     PlacementType = type,
                     PlacementName = string.Empty,
                     Rewarded = false,
@@ -348,7 +354,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                         PlacementName = placeId, 
                         Rewarded = false, 
                         Error = true,
-                        Message = LevelPlayMessages.RewardedUnavailable
+                        Message = AdsMessages.RewardedUnavailable
                     };
                     _applyRewardedCommand.Execute(rewardedResult);
                     return;
@@ -413,7 +419,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                 PlacementName = placementId, 
                 Rewarded = true,
                 Error = false,
-                Message = LevelPlayMessages.RewardedPlacementCapped
+                Message = AdsMessages.RewardedPlacementCapped
             };
             
             _applyRewardedCommand.Execute(rewardedResult);
@@ -442,7 +448,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                     PlacementName = _activePlacement, 
                     Rewarded = false,
                     Error = false,
-                    Message = LevelPlayMessages.RewardedPlacementCapped
+                    Message = AdsMessages.RewardedPlacementCapped
                 };
                 _applyRewardedCommand.Execute(rewardedResult);
             }
@@ -509,7 +515,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                         PlacementName = placeId, 
                         Rewarded = false, 
                         Error = true,
-                        Message = LevelPlayMessages.RewardedUnavailable
+                        Message = AdsMessages.RewardedUnavailable
                     };
                     _applyRewardedCommand.Execute(rewardedResult);
                     return;

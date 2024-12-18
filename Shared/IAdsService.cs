@@ -1,9 +1,9 @@
 ﻿namespace Game.Runtime.Game.Liveplay.Ads.Runtime
 {
 	using System;
-	using Cysharp.Threading.Tasks;
+	using Cysharp.Threading.Tasks;using UniGame.GameFlow.Runtime.Interfaces;
 
-	public interface IAdsService : IDisposable
+	public interface IAdsService : IGameService, IDisposable
 	{
 		bool RewardedAvailable { get; }
 		bool InterstitialAvailable { get; }

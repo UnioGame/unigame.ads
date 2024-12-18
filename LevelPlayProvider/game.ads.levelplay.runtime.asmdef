@@ -1,13 +1,16 @@
 {
-    "name": "levelplay.ads.demo",
+    "name": "game.ads.levelplay.runtime",
     "rootNamespace": "",
     "references": [
         "GUID:0c70dfc96397cc241a2ed4443e32aac4",
         "GUID:f51ebe6a0ceec4240a699833d6309b23",
+        "GUID:760a4c7888534400e882b82c5b3fba06",
         "GUID:8e4577c9194c10845984cf27eb974fd1",
+        "GUID:a0b431bd9232ee0439a3722ec36414ed",
         "GUID:560b04d1a97f54a4e82edc0cbbb69285",
-        "GUID:a65a2ca71d4d1384d94d6db87a27b931",
-        "GUID:ef6a070b35104daebb10cf465963fe42"
+        "GUID:2796129a6c23eb84a8181f62bf7332f1",
+        "GUID:ef6a070b35104daebb10cf465963fe42",
+        "GUID:f9ec70a9381b48e6a55d443c20ce7557"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
@@ -16,19 +19,13 @@
     "precompiledReferences": [],
     "autoReferenced": true,
     "defineConstraints": [
-        "USE_ZENJECT",
-        "LEVEL_PLAY"
+        "LEVEL_PLAY_ENABLED"
     ],
     "versionDefines": [
         {
-            "name": "com.unigame.coremodules",
-            "expression": "",
-            "define": "UNIOGAME"
-        },
-        {
             "name": "com.unity.services.levelplay",
             "expression": "",
-            "define": "LEVEL_PLAY"
+            "define": "LEVEL_PLAY_ENABLED"
         }
     ],
     "noEngineReferences": false

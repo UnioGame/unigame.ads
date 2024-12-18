@@ -1,6 +1,6 @@
 ﻿namespace Game.Runtime.Game.Liveplay.Ads.Runtime
 {
-	public class LevelPlayMessages
+	public class AdsMessages
 	{
 		public const string RewardedUnavailable = "Rewarded video is not available";
 		public const string RewardedPlacementCapped = "Rewarded video placement is capped";
