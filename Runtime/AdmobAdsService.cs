@@ -15,7 +15,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
         private LifeTimeDefinition _lifeTime;
         private AdmobAdsConfig _adsConfig;
         private ReactiveValue<bool> _isInitialized = new();
-        private PlacementIdDataAsset _placementIds;
+        private AdmobPlacementIdDataAsset _placementIds;
         
         private string _activePlacement = string.Empty;
         private bool _isInProgress;
@@ -27,8 +27,8 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
         private Dictionary<string,AdsShowResult> _awaitedRewards = new();
         private ReactiveCommand<AdsShowResult> _applyRewardedCommand = new();
         private Subject<AdsActionData> _adsAction = new();
-        private Dictionary<string, AdsPlacementItem> _placements = new();
-        private Dictionary<PlacementAdsId, AdsPlacementItem> _idPlacements = new();
+        private Dictionary<string, AdmobPlacementItem> _placements = new();
+        private Dictionary<PlacementAdsId, AdmobPlacementItem> _idPlacements = new();
 
         private RewardedAd _rewardedAdCache = null;
         private InterstitialAd _interstitialAdCache = null;
@@ -71,7 +71,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
             Debug.Log("Loading the rewarded ad.");
 
             var adRequest = new AdRequest();
-            string cppId = _placements[placementId].AndroidAdMobId;
+            string cppId = _placements[placementId].AndroidAdmobId;
             bool loadComplete = false;
             bool loaded = false;
 
@@ -227,11 +227,11 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
         }
         public async UniTask<AdsShowResult> Show(PlacementType type)
         {
-            AdsPlacementItem adsPlacementId = default;
+            AdmobPlacementItem adsPlacementId = default;
             foreach (var placement in _placements)
             {
                 var placementValue = placement.Value;
-                if(placementValue.Type != type)
+                if(placementValue.PlacementType != type)
                     continue;
                 if(IsPlacementAvailable(placementValue.Name) == false)
                     continue;
@@ -275,7 +275,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                 Debug.Log($"Placement haven't {placementName}");
                 return false;
             }
-            var placementType = adsPlacementId.Type;
+            var placementType = adsPlacementId.PlacementType;
             
             switch (placementType)
             {

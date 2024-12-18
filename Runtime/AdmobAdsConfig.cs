@@ -12,6 +12,6 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
         [BoxGroup("placements")]
         [InlineEditor]
         [HideLabel]
-        public PlacementIdDataAsset placementIds;
+        public AdmobPlacementIdDataAsset placementIds;
     }
 }
