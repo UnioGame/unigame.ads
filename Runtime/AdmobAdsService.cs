@@ -71,10 +71,11 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
             Debug.Log("Loading the rewarded ad.");
 
             var adRequest = new AdRequest();
+            string cppId = _placements[placementId].AndroidAdMobId;
             bool loadComplete = false;
             bool loaded = false;
 
-            RewardedAd.Load(placementId, adRequest,
+            RewardedAd.Load(cppId, adRequest,
                 (RewardedAd ad, LoadAdError error) =>
                 {
                     if (error != null || ad == null)

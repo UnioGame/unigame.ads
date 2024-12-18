@@ -12,6 +12,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
     {
         public int Id;
         public string Name;
+        public string AndroidAdMobId;
         public PlacementType Type;
     }
 }
