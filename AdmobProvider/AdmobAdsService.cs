@@ -62,7 +62,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
         
         public void LoadAdsAction(AdsActionData actionData)
         {
-            Debug.Log("Don't support preload admob ads, must using concrete unitId");
+            Debug.Log($"[Admob] ads action: NAME:{actionData.PlacementName} ERROR:{actionData.ErrorCode} MESSAGE:{actionData.Message}");
             return;
         }
         
@@ -74,13 +74,14 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                 _rewardedAdCache = null;
             }
 
-            Debug.Log("Loading the rewarded ad.");
+            Debug.Log($"Loading the rewarded ad {placementId}");
 
             var adRequest = new AdRequest();
             string cppId = _placements[placementId].AndroidAdmobId;
             bool loadComplete = false;
             bool loaded = false;
 
+            Debug.Log($"Loading cppId: {cppId}");
             RewardedAd.Load(cppId, adRequest,
                 (RewardedAd ad, LoadAdError error) =>
                 {
@@ -101,9 +102,10 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                 });
 
             await UniTask
-                .WaitWhile(() => loadComplete == true)
+                .WaitWhile(() => loadComplete == false)
                 .AttachExternalCancellation(_lifeTime.Token);
             
+            Debug.Log($"Rewarded ad loaded: {loaded}");
             return loaded;
         }
         public async UniTask<bool> LoadInterstitialAd(string placementId)
@@ -346,7 +348,9 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
         {
             if (_rewardedAdCache == null)
             {
+                Debug.Log("Start load reward video");
                 bool loaded = await LoadRewardedAd(placeId);
+                Debug.Log("Complete load reward video");
 
                 if (loaded == false)
                 {
