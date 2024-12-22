@@ -371,6 +371,8 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
             {
                 _rewardedAdCache.Show((Reward reward) =>
                 {
+                    OnGetInvokeRewardVideo().Forget();
+                    
                     Debug.Log(String.Format("Instead msg about reward video complete", reward.Type, reward.Amount));
                 });
             }
@@ -378,6 +380,30 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
             {
                 Debug.Log("Something went wrong with CanShowAd");
             }
+        }
+
+        public async UniTask OnGetInvokeRewardVideo()
+        {
+            await UniTask.Delay(TimeSpan.FromSeconds(5));
+            
+            var placementId = _rewardedAdCache.GetAdUnitID();
+    
+            var rewardedResult = new AdsShowResult { 
+                PlacementName = placementId, 
+                Rewarded = true,
+                Error = false,
+                Message = AdsMessages.RewardedPlacementCapped
+            };
+    
+            _applyRewardedCommand.Execute(rewardedResult);
+            
+            _adsAction.OnNext(new AdsActionData()
+            {
+                PlacementName = placementId,
+                Message = "Complete",
+                ActionType = PlacementActionType.Rewarded,
+                PlacementType = PlacementType.Rewarded,
+            });
         }
         private void SubscribeToRewardedAdEvents(RewardedAd rewardedAd)
         {
@@ -417,24 +443,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
         }
         private void RewardedVideoOnAdPaidEvent(AdValue adValue)
         {
-            var placementId = _rewardedAdCache.GetAdUnitID();
             
-            var rewardedResult = new AdsShowResult { 
-                PlacementName = placementId, 
-                Rewarded = true,
-                Error = false,
-                Message = AdsMessages.RewardedPlacementCapped
-            };
-            
-            _applyRewardedCommand.Execute(rewardedResult);
-            
-            _adsAction.OnNext(new AdsActionData()
-            {
-                PlacementName = placementId,
-                Message = "Paid",
-                ActionType = PlacementActionType.Rewarded,
-                PlacementType = PlacementType.Rewarded,
-            });
             
             Debug.Log("Rewarded: on ad paid");
         }
@@ -468,6 +477,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
 
             UnsubscribeToRewardedAdEvents(_rewardedAdCache);
             _rewardedAdCache.Destroy();
+            _rewardedAdCache = null;
         }
         private void RewardedVideoOnAdFullScreenContentOpenedEvent()
         {
