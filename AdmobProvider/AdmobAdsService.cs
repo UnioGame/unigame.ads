@@ -32,9 +32,9 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
         private Dictionary<string, AdmobPlacementItem> _placements = new();
         private Dictionary<PlacementAdsId, AdmobPlacementItem> _idPlacements = new();
 
-        private RewardedAd _rewardedAdCache = null;
         private InterstitialAd _interstitialAdCache = null;
         
+        private Dictionary<string, AdmobRewardedAdsCache> _rewardedAdsCache = new();
         public AdmobAdsService(AdmobAdsConfig config)
         {
             Debug.Log($"ADS SERVICE: admob created");
@@ -57,7 +57,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
             
             InitializeAsync().Forget();
         }
-        
+
         public ILifeTime LifeTime => _lifeTime;
         
         public void LoadAdsAction(AdsActionData actionData)
@@ -68,18 +68,27 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
         
         public async UniTask<bool> LoadRewardedAd(string placementId)
         {
-            if (_rewardedAdCache != null)
+            Debug.Log($"Loading the rewarded ad {placementId}. " +
+                      $"Load:{_rewardedAdsCache[placementId].LoadProcess}. " +
+                      $"Cache:{_rewardedAdsCache[placementId].RewardedAd}");
+            
+            if (_rewardedAdsCache[placementId].LoadProcess == true)
             {
-                _rewardedAdCache.Destroy();
-                _rewardedAdCache = null;
+                await UniTask
+                    .WaitWhile(() => _rewardedAdsCache[placementId].LoadProcess == true)
+                    .AttachExternalCancellation(_lifeTime.Token);
             }
-
-            Debug.Log($"Loading the rewarded ad {placementId}");
+            
+            RewardedAd adsRewardedAd = _rewardedAdsCache[placementId].RewardedAd;
+            
+            if (adsRewardedAd != null)
+                return true;
 
             var adRequest = new AdRequest();
             string cppId = _placements[placementId].AndroidAdmobId;
             bool loadComplete = false;
             bool loaded = false;
+            _rewardedAdsCache[placementId].LoadProcess = true;
 
             Debug.Log($"Loading cppId: {cppId}");
             RewardedAd.Load(cppId, adRequest,
@@ -96,7 +105,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                     Debug.Log("Rewarded ad loaded with response : "
                               + ad.GetResponseInfo());
 
-                    _rewardedAdCache = ad;
+                    _rewardedAdsCache[placementId].RewardedAd = ad;
                     loaded = true;
                     loadComplete = true;
                 });
@@ -104,8 +113,11 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
             await UniTask
                 .WaitWhile(() => loadComplete == false)
                 .AttachExternalCancellation(_lifeTime.Token);
+            _rewardedAdsCache[placementId].LoadProcess = false;
             
             Debug.Log($"Rewarded ad loaded: {loaded}");
+
+            _rewardedAdsCache[placementId].Available = loaded;
             return loaded;
         }
         public async UniTask<bool> LoadInterstitialAd(string placementId)
@@ -302,8 +314,10 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
         public void Dispose()
         {
             _lifeTime.Terminate();
- 
-            UnsubscribeToRewardedAdEvents(_rewardedAdCache);
+
+            foreach (var (key, val) in _rewardedAdsCache)
+                UnsubscribeToRewardedAdEvents(_rewardedAdsCache[key].RewardedAd);
+            
             UnsubscribeToInterstitialAdEvents(_interstitialAdCache);
         }
         private async UniTask InitializeAsync()
@@ -318,6 +332,15 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
 
             Debug.Log($"[Ads Service] admob initialized {isInitialized}");
 
+            foreach (var adsPlacementId in _placementIds.Types)
+            {
+                if (adsPlacementId.PlacementType == PlacementType.Rewarded)
+                {
+                    _rewardedAdsCache.Add(adsPlacementId.Name, new AdmobRewardedAdsCache(adsPlacementId.Name));
+                    LoadRewardedAd(adsPlacementId.Name).Forget();
+                }
+            }
+            
             _applyRewardedCommand
                 .Subscribe(ApplyRewardedCommand)
                 .AddTo(_lifeTime);
@@ -346,11 +369,13 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
         #region rewarded block
         private async UniTask ShowRewardedVideo(string placeId)
         {
-            if (_rewardedAdCache == null)
+            Debug.Log($"[Ads service] Try to show {placeId}");
+            RewardedAd rewardedAd = _rewardedAdsCache[placeId].RewardedAd;
+            if (rewardedAd == null)
             {
-                Debug.Log("Start load reward video");
+                Debug.Log($"Start load reward video {placeId}");
                 bool loaded = await LoadRewardedAd(placeId);
-                Debug.Log("Complete load reward video");
+                Debug.Log($"Complete load reward video {placeId}");
 
                 if (loaded == false)
                 {
@@ -364,12 +389,13 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                     return;
                 }
                 
-                SubscribeToRewardedAdEvents(_rewardedAdCache);
+                SubscribeToRewardedAdEvents(_rewardedAdsCache[placeId].RewardedAd);
             }
             
-            if (_rewardedAdCache.CanShowAd())
+            if (rewardedAd.CanShowAd())
             {
-                _rewardedAdCache.Show((Reward reward) =>
+                _activePlacement = placeId;
+                rewardedAd.Show((Reward reward) =>
                 {
                     OnGetInvokeRewardVideo().Forget();
                     
@@ -384,9 +410,9 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
 
         public async UniTask OnGetInvokeRewardVideo()
         {
-            await UniTask.Delay(TimeSpan.FromSeconds(5));
+            var placementId = _rewardedAdsCache[_activePlacement].RewardedAd.GetAdUnitID();
             
-            var placementId = _rewardedAdCache.GetAdUnitID();
+            await UniTask.DelayFrame(1);
     
             var rewardedResult = new AdsShowResult { 
                 PlacementName = placementId, 
@@ -453,7 +479,9 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
         }
         private void RewardedVideoOnAdFullScreenContentClosedEvent()
         {
-            var placement = _rewardedAdCache.GetAdUnitID();
+            RewardedAd rewardedAd = _rewardedAdsCache[_activePlacement].RewardedAd;
+            
+            var placement = rewardedAd.GetAdUnitID();
             
             if(!_awaitedRewards.TryGetValue(placement,out var result))
             {
@@ -475,9 +503,9 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
             });
             Debug.Log("Rewarded: on ad full screen closed");
 
-            UnsubscribeToRewardedAdEvents(_rewardedAdCache);
-            _rewardedAdCache.Destroy();
-            _rewardedAdCache = null;
+            UnsubscribeToRewardedAdEvents(rewardedAd);
+            rewardedAd.Destroy();
+            rewardedAd = null;
         }
         private void RewardedVideoOnAdFullScreenContentOpenedEvent()
         {
@@ -493,6 +521,8 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
         }
         private void RewardedVideoOnAdFullScreenContentFailedEvent(AdError error)
         {
+            RewardedAd rewardedAd = _rewardedAdsCache[_activePlacement].RewardedAd;
+            
             _adsAction.OnNext(new AdsActionData()
             {
                 PlacementName = _activePlacement,
@@ -501,8 +531,9 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                 PlacementType = PlacementType.Rewarded,
             });
             
-            UnsubscribeToRewardedAdEvents(_rewardedAdCache);
-            _rewardedAdCache.Destroy();
+            UnsubscribeToRewardedAdEvents(rewardedAd);
+            rewardedAd.Destroy();
+            rewardedAd = null;
             Debug.Log("Rewarded: on ad full screen failed");
         }
         private void ApplyRewardedCommand(AdsShowResult result)
@@ -586,7 +617,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
         }
         private void InterstitialVideoOnAdPaidEvent(AdValue adValue)
         {
-            var placementId = _rewardedAdCache.GetAdUnitID();
+            var placementId = _interstitialAdCache.GetAdUnitID();
             _adsAction.OnNext(new AdsActionData()
             {
                 PlacementName = placementId,
