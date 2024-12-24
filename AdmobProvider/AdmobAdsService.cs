@@ -110,6 +110,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                           + ad.GetResponseInfo());
 
                 _rewardedAdsCache[placementId].RewardedAd = ad;
+                SubscribeToRewardedAdEvents(ad);
                 loaded = true;
                 loadComplete = true;
             });
@@ -437,7 +438,6 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
             if (rewardedAd!=null && rewardedAd.CanShowAd())
             {
                 _activePlacement = placeId;
-                SubscribeToRewardedAdEvents(rewardedAd);
                 rewardedAd.Show(_ => CompleteRewardedVideo(true,AdsMessages.Rewarded));
             }
             else
@@ -482,8 +482,6 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
         private void SubscribeToRewardedAdEvents(RewardedAd rewardedAd)
         {
             if(rewardedAd == null) return;
-            
-            UnsubscribeToRewardedAdEvents(rewardedAd);
             
             rewardedAd.OnAdClicked += RewardedVideoOnAdClickedEvent;
             rewardedAd.OnAdPaid += RewardedVideoOnAdPaidEvent;
@@ -563,6 +561,8 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
             
             rewardedAd.Destroy();
             adsRewardedAd.RewardedAd = null;
+
+            LoadRewardedAd(placementId).Forget();
         }
         
         private void ApplyRewardedCommand(AdsShowResult result)
