@@ -468,8 +468,6 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                 _applyRewardedCommand.Execute(rewardedResult);
             }
             
-            KillRewardedAds(placementId);
-            
             _adsAction.OnNext(new AdsActionData()
             {
                 PlacementName = placementId,
@@ -477,6 +475,8 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                 ActionType = PlacementActionType.Rewarded,
                 PlacementType = PlacementType.Rewarded,
             });
+            
+            // KillRewardedAds(placementId);
         }
         
         private void SubscribeToRewardedAdEvents(RewardedAd rewardedAd)
@@ -528,7 +528,18 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
         
         private void RewardedVideoOnAdFullScreenContentClosedEvent()
         {
-            CompleteRewardedVideo(false,AdsMessages.RewardedClosed);
+            KillRewardedAds(_activePlacement);
+            
+            _adsAction.OnNext(new AdsActionData()
+            {
+                PlacementName = _activePlacement,
+                Message = string.Empty,
+                ActionType = PlacementActionType.Closed,
+                PlacementType = PlacementType.Rewarded,
+            });
+            
+            Debug.Log("[ADS SERVICE]: Rewarded: on ad full screen closed");
+            // CompleteRewardedVideo(false,AdsMessages.RewardedClosed);
         }
         
         private void RewardedVideoOnAdFullScreenContentOpenedEvent()
