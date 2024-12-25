@@ -20,6 +20,12 @@
     "defineConstraints": [
         "ADMOB_ENABLED"
     ],
-    "versionDefines": [],
+    "versionDefines": [
+        {
+            "name": "com.google.ads.mobile",
+            "expression": "",
+            "define": "ADMOB_ENABLED"
+        }
+    ],
     "noEngineReferences": false
 }
