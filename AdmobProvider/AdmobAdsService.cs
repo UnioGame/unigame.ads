@@ -110,6 +110,12 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                           + ad.GetResponseInfo());
 
                 _rewardedAdsCache[placementId].RewardedAd = ad;
+                
+// #if GAME_ANALYTICS_SDK
+//                 if(ad!=null)
+//                     GameAnalyticsSDK.Events.GA_Ads...SubscribeAdMobImpressions(placementId, ad);     
+// #endif
+                
                 SubscribeToRewardedAdEvents(ad);
                 loaded = true;
                 loadComplete = true;
@@ -482,6 +488,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
         private void SubscribeToRewardedAdEvents(RewardedAd rewardedAd)
         {
             if(rewardedAd == null) return;
+
             
             rewardedAd.OnAdClicked += RewardedVideoOnAdClickedEvent;
             rewardedAd.OnAdPaid += RewardedVideoOnAdPaidEvent;
