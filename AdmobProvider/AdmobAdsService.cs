@@ -14,6 +14,8 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
     [Serializable]
     public class AdmobAdsService : IAdsService
     {
+        public const string AdmobSdk = "admob";
+        
         private LifeTimeDefinition _lifeTime;
         private AdmobAdsConfig _adsConfig;
         private ReactiveValue<bool> _isInitialized = new();
@@ -218,6 +220,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                 Message = string.Empty,
                 ActionType = PlacementActionType.Requested,
                 PlacementType =type,
+                SdkName = AdmobSdk,
             });
 
             if (!IsPlacementAvailable(placeId))
@@ -444,32 +447,49 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
             if (rewardedAd!=null && rewardedAd.CanShowAd())
             {
                 _activePlacement = placeId;
-                rewardedAd.Show(_ => CompleteRewardedVideo(true,AdsMessages.Rewarded));
+                rewardedAd.Show(reward =>
+                {
+                    CompleteRewardedVideoAsync(new AdmobRewardedResult
+                    {
+                        Reward = reward,
+                        PlacementId = _activePlacement,
+                        Message = string.Empty,
+                        Error = null,
+                    }).Forget();
+                });
             }
             else
             {
                 Debug.Log("[ADS SERVICE]:Something went wrong with CanShowAd");
             }
         }
-
-        private void CompleteRewardedVideo(bool rewarded, string message = "")
-        {
-            CompleteRewardedVideoAsync(rewarded, message).Forget();
-        }
         
-        private async UniTask CompleteRewardedVideoAsync(bool rewarded, string message = "")
+        private async UniTask CompleteRewardedVideoAsync(AdmobRewardedResult adResult)
         {
             var placementId = _activePlacement;
             await UniTask.SwitchToMainThread();
+            
+            var rewarded = adResult.Reward != null;
+            var adError = adResult.Error;
+            var reward = adResult.Reward;
+            
+            var error = adError !=null ? adError.GetMessage() : string.Empty;
+            var message = !rewarded ? error : adResult.Message;
+            var rewardName = reward != null ? reward.Type : placementId;
+            var rewardAmount = reward?.Amount ?? 0f;
+            var errorCode = adError?.GetCode() ?? 0;
+            
             if(!_awaitedRewards.TryGetValue(placementId,out var result))
             {
                 var rewardedResult = new AdsShowResult { 
                     PlacementName = placementId, 
                     Rewarded = rewarded,
                     Error = !rewarded,
-                    Message = message
+                    Message = message,
+                    PlacementType = PlacementType.Rewarded,
+                    RewardName = rewardName,
+                    RewardAmount = (float)rewardAmount,
                 };
-            
                 
                 _applyRewardedCommand.Execute(rewardedResult);
             }
@@ -480,15 +500,15 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                 Message = message,
                 ActionType = PlacementActionType.Rewarded,
                 PlacementType = PlacementType.Rewarded,
+                SdkName = AdmobSdk,
+                Duration = 30,
+                ErrorCode = errorCode,
             });
-            
-            // KillRewardedAds(placementId);
         }
         
         private void SubscribeToRewardedAdEvents(RewardedAd rewardedAd)
         {
             if(rewardedAd == null) return;
-
             
             rewardedAd.OnAdClicked += RewardedVideoOnAdClickedEvent;
             rewardedAd.OnAdPaid += RewardedVideoOnAdPaidEvent;
@@ -518,6 +538,9 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                 Message = string.Empty,
                 ActionType = PlacementActionType.Clicked,
                 PlacementType = PlacementType.Rewarded,
+                SdkName = AdmobSdk,
+                Duration = 0,
+                ErrorCode = 0,
             });
             
             Debug.Log("[ADS SERVICE]: Rewarded: on ad clicked");
@@ -543,6 +566,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                 Message = string.Empty,
                 ActionType = PlacementActionType.Closed,
                 PlacementType = PlacementType.Rewarded,
+                SdkName = AdmobSdk,
             });
             
             Debug.Log("[ADS SERVICE]: Rewarded: on ad full screen closed");
@@ -557,6 +581,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                 Message = string.Empty,
                 ActionType = PlacementActionType.Opened,
                 PlacementType = PlacementType.Rewarded,
+                SdkName = AdmobSdk,
             });
             
             Debug.Log("[ADS SERVICE]: Rewarded: on ad full screen opened");
@@ -564,7 +589,13 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
         
         private void RewardedVideoOnAdFullScreenContentFailedEvent(AdError error)
         {
-            CompleteRewardedVideo(false,AdsMessages.RewardedFailed);
+            CompleteRewardedVideoAsync(new AdmobRewardedResult
+            {
+                Reward = null,
+                PlacementId = _activePlacement,
+                Message = string.Empty,
+                Error = error,
+            }).Forget();
         }
 
         private void KillRewardedAds(string placementId)
@@ -659,6 +690,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                 Message = string.Empty,
                 ActionType = PlacementActionType.Clicked,
                 PlacementType = PlacementType.Rewarded,
+                SdkName = AdmobSdk,
             });
             
             Debug.Log("Interstitial: on ad clicked");
@@ -673,6 +705,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                 Message = "Paid",
                 ActionType = PlacementActionType.Rewarded,
                 PlacementType = PlacementType.Interstitial,
+                SdkName = AdmobSdk,
             });
             
             Debug.Log("Interstitial: on ad paid");
@@ -691,6 +724,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                 Message = string.Empty,
                 ActionType = PlacementActionType.Closed,
                 PlacementType = PlacementType.Interstitial,
+                SdkName = AdmobSdk,
             });
             Debug.Log("Interstitial: on ad full screen closed");
 
@@ -705,6 +739,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                 Message = string.Empty,
                 ActionType = PlacementActionType.Opened,
                 PlacementType = PlacementType.Interstitial,
+                SdkName = AdmobSdk,
             });
             
             Debug.Log("Interstitial: on ad full screen opened");
@@ -717,6 +752,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                 Message = string.Empty,
                 ActionType = PlacementActionType.Failed,
                 PlacementType = PlacementType.Interstitial,
+                SdkName = AdmobSdk,
             });
             
             UnsubscribeToInterstitialAdEvents(_interstitialAdCache);
@@ -730,5 +766,13 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
         {
             _isInitialized.Value = true;
         }
+    }
+
+    public struct AdmobRewardedResult
+    {
+        public Reward Reward;
+        public AdError Error;
+        public string PlacementId;
+        public string Message;
     }
 }
