@@ -1,18 +1,14 @@
 namespace Game.Runtime.Game.Liveplay.Ads.Runtime
 {
     using System;
+    using Modules.unigame.levelplay.Shared;
     using Sirenix.OdinInspector;
-    
-    [Serializable]
-    public class AdmobAdsConfig
-    {
-        public bool enableAds = true;
-		
-        public float reloadAdsInterval = 30f;
+    using UnityEngine;
+    using UnityEngine.Serialization;
 
-        [BoxGroup("placements")]
-        [InlineEditor]
-        [HideLabel]
-        public AdmobPlacementIdDataAsset placementIds;
+    [CreateAssetMenu(menuName = "Ads/Admob/Admob Ads Config", fileName = "Admob Ads Config")]
+    public class AdmobAdsConfig : AdsConfig
+    {
+        
     }
 }

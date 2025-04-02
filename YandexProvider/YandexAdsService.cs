@@ -47,9 +47,12 @@ namespace VN.Runtime.Ads
             _reloadAdsInterval = yandexAdsConfiguration.ReloadAdsInterval;
             _lastAdsReloadTime = -_reloadAdsInterval;
 
-            foreach (var adsPlacementId in _placementIds.Types)
+            foreach (var adsPlacementId in _placementIds.Placements)
             {
-                _placements[adsPlacementId.Name] = adsPlacementId;
+                Debug.Log($"Set: {_placementIds.GetPlatformPlacementByName(adsPlacementId.Name).GetPlacementIdByPlatform(yandexAdsConfiguration.PlacementPlatfrom)} to {_placementIds.GetPlatformPlacementByName(adsPlacementId.Name)}");
+                _placements[_placementIds.GetPlatformPlacementByName(adsPlacementId.Name)
+                    .GetPlacementIdByPlatform(yandexAdsConfiguration.PlacementPlatfrom)] 
+                    = _placementIds.GetPlatformPlacementByName(adsPlacementId.Name);
                 _idPlacements[(PlacementAdsId)adsPlacementId.Id] = adsPlacementId;
             }
 
@@ -88,6 +91,7 @@ namespace VN.Runtime.Ads
         }
         public bool IsPlacementAvailable(string placementName)
         {
+            placementName = _placementIds.GetPlatformPlacementByName(placementName).GetPlacementIdByPlatform(_adsConfig.PlacementPlatfrom);
             if (_placements.TryGetValue(placementName, out var adsPlacementId) == false)
             {
                 Debug.Log($"Placement haven't {placementName}");
@@ -152,6 +156,7 @@ namespace VN.Runtime.Ads
 
         public async UniTask<AdsShowResult> Show(string placement, PlacementType type)
         {
+            placement = _placementIds.GetPlatformPlacementByName(placement).GetPlacementIdByPlatform(_adsConfig.PlacementPlatfrom);
             _activePlacement = placement;
             
             Debug.Log($"ADS SERVICE: Show {placement} {type}");

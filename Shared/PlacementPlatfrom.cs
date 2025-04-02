@@ -1,7 +1,12 @@
 namespace Game.Modules.unigame.levelplay.Shared
 {
-    public class PlacementPlatfrom
+    using System;
+
+    [Serializable]
+    public enum PlacementPlatfrom : byte
     {
-        
+        Google,
+        IOS,
+        Debug
     }
 }

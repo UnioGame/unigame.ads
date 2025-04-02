@@ -4,20 +4,14 @@ using UnityEngine;
 
 namespace VN.Runtime.Ads
 {
-    [CreateAssetMenu(fileName = "Yandex Ads Config", menuName = "Game/Configuration/Ads/YandexAdsConfig")]
-    public class YandexAdsConfiguration : ScriptableObject
+    using global::Game.Modules.unigame.levelplay.Shared;
+
+    [CreateAssetMenu(fileName = "Yandex Ads Config", menuName = "Ads/Yandex/Yandex Ads Config")]
+    public class YandexAdsConfiguration : AdsConfig
     {
-        public bool EnableAds;
-        public float ReloadAdsInterval = 30f;
-        
-        [BoxGroup("placements")]
-        [InlineEditor]
-        [HideLabel]
-        public PlacementIdDataAsset placementIds;
-        
         public string GetRewardedPlacement()
         {
-            foreach(AdsPlacementItem item in placementIds.Types)
+            foreach(AdsPlacementItem item in placementIds.Placements)
             {
                 if (item.Type == PlacementType.Rewarded)
                     return item.Name;

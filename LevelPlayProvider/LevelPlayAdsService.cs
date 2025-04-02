@@ -41,7 +41,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
             _lastAdsReloadTime = -_reloadAdsInterval;
             _placementIds = config.placementIds;
 
-            foreach (var adsPlacementId in _placementIds.Types)
+            foreach (var adsPlacementId in _placementIds.Placements)
             {
                 _placements[adsPlacementId.Name] = adsPlacementId;
                 _idPlacements[(PlacementAdsId)adsPlacementId.Id] = adsPlacementId;

@@ -24,7 +24,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
         public static IEnumerable<ValueDropdownItem<PlacementAdsId>> GetPlacementIds()
         {
 #if UNITY_EDITOR
-            _dataAsset ??= AssetEditorTools.GetAsset<PlacementIdDataAsset>();
+            // _dataAsset ??= AssetEditorTools.GetAsset<PlacementIdDataAsset>();
             var types = _dataAsset;
             if (types == null)
             {
@@ -36,7 +36,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                 yield break;
             }
 
-            foreach (var type in types.Types)
+            foreach (var type in types.Placements)
             {
                 yield return new ValueDropdownItem<PlacementAdsId>()
                 {
