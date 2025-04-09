@@ -15,7 +15,13 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
         public PlacementType Type;
         public string GetPlacementIdByPlatform(PlacementPlatfrom platform)
         {
-            return Placements.FirstOrDefault(x => x.Platfrom == platform)?.PlacementId;
+            foreach (var item in Placements)
+            {
+                if (item.Platfrom == platform)
+                    return item.PlacementId;
+            }
+
+            return default;
         }
     }
 

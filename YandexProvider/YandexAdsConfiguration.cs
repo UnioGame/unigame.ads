@@ -9,14 +9,14 @@ namespace VN.Runtime.Ads
     [CreateAssetMenu(fileName = "Yandex Ads Config", menuName = "Ads/Yandex/Yandex Ads Config")]
     public class YandexAdsConfiguration : AdsConfig
     {
-        public string GetRewardedPlacement()
+        public AdsPlacementItem GetRewardedPlacement()
         {
             foreach(AdsPlacementItem item in placementIds.Placements)
             {
                 if (item.Type == PlacementType.Rewarded)
-                    return item.Name;
+                    return item;
             }
-            return "demo-rewarded-yandex";
+            return default;
         }
     }
 }

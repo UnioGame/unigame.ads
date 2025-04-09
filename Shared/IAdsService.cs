@@ -15,8 +15,6 @@
 		
 		UniTask LoadAdsAsync();
 
-		UniTask<AdsShowResult> Show(PlacementAdsId placement);
-		
 		UniTask<AdsShowResult> Show(string placement, PlacementType type);
 
 		UniTask<AdsShowResult> Show(PlacementType type);

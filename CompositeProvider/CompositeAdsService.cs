@@ -4,6 +4,7 @@ namespace VN.Game.Modules.unigame.levelplay.AdsCommonProvider
     using System.Collections.Generic;
     using System.Threading.Tasks;
     using Cysharp.Threading.Tasks;
+    using global::Game.Modules.unigame.levelplay.Shared;
     using global::Game.Runtime.Game.Liveplay.Ads.Runtime;
     using UniGame.Core.Runtime;
     using UniModules.UniCore.Runtime.DataFlow;
@@ -45,7 +46,6 @@ namespace VN.Game.Modules.unigame.levelplay.AdsCommonProvider
 
             return false;
         }
-
         public UniTask LoadAdsAsync()
         {
             throw new NotImplementedException();
