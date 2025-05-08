@@ -11,7 +11,7 @@
 
 		void ValidateIntegration();
 
-		bool IsPlacementAvailable(string placementName);
+		UniTask<bool> IsPlacementAvailable(string placementName);
 		
 		UniTask LoadAdsAsync();
 

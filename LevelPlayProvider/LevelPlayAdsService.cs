@@ -117,7 +117,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                 PlacementType =type,
             });
 
-            if (!IsPlacementAvailable(placeId))
+            if (!await IsPlacementAvailable(placeId))
             {
                 AddPlacementResult(placeId,type,false,true,AdsMessages.PlacementCapped);
             }
@@ -171,7 +171,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                 var placementValue = placement.Value;
                 if(placementValue.Type != type)
                     continue;
-                if(IsPlacementAvailable(placementValue.Name) == false)
+                if(await IsPlacementAvailable(placementValue.Name) == false)
                     continue;
                 adsPlacementId = placementValue;
                 break;
@@ -205,7 +205,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
             return showResult;
         }
         
-        public bool IsPlacementAvailable(string placementName)
+        public async UniTask<bool> IsPlacementAvailable(string placementName)
         {
             if(_placements.TryGetValue(placementName,out var adsPlacementId) == false)
             {

@@ -25,7 +25,7 @@ namespace VN.Runtime.Ads
             lifeTime.Release();
         }
 
-        public bool IsPlacementAvailable(string placementName)
+        public async UniTask<bool> IsPlacementAvailable(string placementName)
         {
             return true;
         }

@@ -223,7 +223,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                 SdkName = AdmobSdk,
             });
 
-            if (!IsPlacementAvailable(placeId))
+            if (!await IsPlacementAvailable(placeId))
             {
                 AddPlacementResult(placeId,type,false,true,AdsMessages.PlacementCapped);
                 return new AdsShowResult()
@@ -287,7 +287,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                 var placementValue = placement.Value;
                 if(placementValue.Type != type)
                     continue;
-                if(IsPlacementAvailable(placementValue.Name) == false)
+                if(await IsPlacementAvailable(placementValue.Name) == false)
                     continue;
                 adsPlacementId = placementValue;
                 break;
@@ -326,7 +326,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
             
         }
         
-        public bool IsPlacementAvailable(string placementName)
+        public async UniTask<bool> IsPlacementAvailable(string placementName)
         {
             if(_placements.TryGetValue(placementName,out var adsPlacementId) == false)
             {
@@ -339,7 +339,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
             switch (placementType)
             {
                 case PlacementType.Rewarded:
-                    return true;
+                    return await LoadRewardedAd(placementName);
                 case PlacementType.Interstitial:
                     return true;
             }

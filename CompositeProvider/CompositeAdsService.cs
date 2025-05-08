@@ -46,11 +46,11 @@ namespace VN.Game.Modules.unigame.levelplay.AdsCommonProvider
             }
         }
 
-        public bool IsPlacementAvailable(string placementName)
+        public async UniTask<bool> IsPlacementAvailable(string placementName)
         {
             foreach (var service in _adsServices)
             {
-                if (!service.IsPlacementAvailable(placementName)) continue;
+                if (!await service.IsPlacementAvailable(placementName)) continue;
                 _serviceWithAvailableAds = service;
                 return true;
             }

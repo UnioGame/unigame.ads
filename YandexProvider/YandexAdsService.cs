@@ -82,7 +82,7 @@ namespace VN.Runtime.Ads
 
             _awaitedRewards[placeId] = result;
         }
-        public bool IsPlacementAvailable(string placementName)
+        public async UniTask<bool> IsPlacementAvailable(string placementName)
         {
             var adsPlacementItem = _placementIds.GetPlatformPlacementByName(placementName);
             if (adsPlacementItem.Equals(default(AdsPlacementItem)))
