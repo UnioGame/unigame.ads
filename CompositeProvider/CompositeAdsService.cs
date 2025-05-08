@@ -11,12 +11,15 @@ namespace VN.Game.Modules.unigame.levelplay.AdsCommonProvider
     using UniModules.UniCore.Runtime.DataFlow;
     using UniRx;
 
+    public enum AdsStatus { Ready, Failed, Loading }
     public class CompositeAdsService : IAdsService
     {
         private LifeTimeDefinition _lifeTime;
         private List<IAdsService> _adsServices;
         private IAdsService _serviceWithAvailableAds;
         private Subject<AdsActionData> _adsAction;
+        private Dictionary<IAdsService, AdsStatus> _adsAvailableStatus = new ();
+        private float _timeoutAds = 1.5f;
         
         public CompositeAdsService(List<IAdsService> services)
         {
@@ -50,12 +53,33 @@ namespace VN.Game.Modules.unigame.levelplay.AdsCommonProvider
         {
             foreach (var service in _adsServices)
             {
-                if (!await service.IsPlacementAvailable(placementName)) continue;
-                _serviceWithAvailableAds = service;
+                _adsAvailableStatus.Add(service, AdsStatus.Loading);
+                RequestAds(placementName, service).Forget();
+            }
+
+            await UniTask.Delay(TimeSpan.FromSeconds(_timeoutAds));
+
+            foreach (var service in _adsAvailableStatus)
+            {
+                if (service.Value == AdsStatus.Failed || service.Value == AdsStatus.Loading)
+                    continue;
+                
+                _serviceWithAvailableAds = service.Key;
                 return true;
             }
 
             return false;
+        }
+
+        private async UniTask RequestAds(string placementName, IAdsService service)
+        {
+            if (!await service.IsPlacementAvailable(placementName))
+            {
+                _adsAvailableStatus[service] = AdsStatus.Failed;
+                return;
+            }
+
+            _adsAvailableStatus[service] = AdsStatus.Ready;
         }
         
         public async UniTask<AdsShowResult> ShowRewardedAdAsync(string placeId)
