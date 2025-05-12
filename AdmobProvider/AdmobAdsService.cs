@@ -79,6 +79,9 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                       $"Load:{_rewardedAdsCache[placementId].LoadProcess}. " +
                       $"Cache:{_rewardedAdsCache[placementId].RewardedAd}");
             
+            if(!_rewardedAdsCache.ContainsKey(placementId))
+                throw new Exception($"{placementId} not found into map");
+            
             if (_rewardedAdsCache[placementId].LoadProcess == true)
             {
                 await UniTask

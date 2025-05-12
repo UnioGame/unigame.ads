@@ -53,7 +53,7 @@ namespace VN.Game.Modules.unigame.levelplay.AdsCommonProvider
         {
             foreach (var service in _adsServices)
             {
-                _adsAvailableStatus.Add(service, AdsStatus.Loading);
+                _adsAvailableStatus.TryAdd(service, AdsStatus.Loading);
                 RequestAds(placementName, service).Forget();
             }
 
@@ -73,6 +73,8 @@ namespace VN.Game.Modules.unigame.levelplay.AdsCommonProvider
 
         private async UniTask RequestAds(string placementName, IAdsService service)
         {
+            _adsAvailableStatus[service] = AdsStatus.Loading;
+            
             if (!await service.IsPlacementAvailable(placementName))
             {
                 _adsAvailableStatus[service] = AdsStatus.Failed;
