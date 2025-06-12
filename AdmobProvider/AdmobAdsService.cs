@@ -5,12 +5,11 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
     using System.Collections.Generic;
     using Cysharp.Threading.Tasks;
     using GoogleMobileAds.Api;
+    using R3;
     using UniGame.Core.Runtime;
-    using UniModules.UniCore.Runtime.DataFlow;
-    using UniModules.UniCore.Runtime.Extension;
-    using UniModules.UniGame.Core.Runtime.Rx;
-    using UniRx;
-    
+    using UniGame.Runtime.DataFlow;
+    using UniGame.Runtime.Rx;
+
     [Serializable]
     public class AdmobAdsService : IAdsService
     {
@@ -64,7 +63,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                 
         public virtual bool RewardedAvailable => true;
         public virtual bool InterstitialAvailable => true;
-        public IObservable<AdsActionData> AdsAction => _adsAction;
+        public Observable<AdsActionData> AdsAction => _adsAction;
         public bool IsInProgress => _isInProgress;
         
         public void LoadAdsAction(AdsActionData actionData)
@@ -372,7 +371,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
             
             var isInitialized = await _isInitialized
                 .Where(x => x)
-                .AwaitFirstAsync(_lifeTime);
+                .FirstAsync(_lifeTime.Token);
 
             Debug.Log($"[ADS SERVICE]: admob initialized {isInitialized}");
 

@@ -3,13 +3,11 @@ namespace VN.Game.Modules.unigame.levelplay.AdsCommonProvider
     using System;
     using System.Collections.Generic;
     using System.Linq;
-    using System.Threading.Tasks;
     using Cysharp.Threading.Tasks;
-    using global::Game.Modules.unigame.levelplay.Shared;
     using global::Game.Runtime.Game.Liveplay.Ads.Runtime;
+    using R3;
     using UniGame.Core.Runtime;
-    using UniModules.UniCore.Runtime.DataFlow;
-    using UniRx;
+    using UniGame.Runtime.DataFlow;
 
     public enum AdsStatus { Ready, Failed, Loading }
     public class CompositeAdsService : IAdsService
@@ -27,9 +25,12 @@ namespace VN.Game.Modules.unigame.levelplay.AdsCommonProvider
             _lifeTime = new LifeTimeDefinition();
             _adsAction = new Subject<AdsActionData>()
                 .AddTo(_lifeTime);
-            
+
             foreach (var service in _adsServices)
-                service.AdsAction.Subscribe(_adsAction).AddTo(_lifeTime);
+            {
+                service.AdsAction
+                    .Subscribe(_adsAction.OnNext).AddTo(_lifeTime);
+            }
         }
         
         public ILifeTime LifeTime => _lifeTime;
@@ -37,7 +38,7 @@ namespace VN.Game.Modules.unigame.levelplay.AdsCommonProvider
         public bool RewardedAvailable => _adsServices.Any(x => x.RewardedAvailable);
         
         public bool InterstitialAvailable  => _adsServices.Any(x => x.InterstitialAvailable);
-        public IObservable<AdsActionData> AdsAction => _adsAction;
+        public Observable<AdsActionData> AdsAction => _adsAction;
         
         public void Dispose() => _lifeTime.Terminate();
 

@@ -3,11 +3,10 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
     using System;
     using System.Collections.Generic;
     using Cysharp.Threading.Tasks;
+    using R3;
     using UniGame.Core.Runtime;
-    using UniModules.UniCore.Runtime.DataFlow;
-    using UniModules.UniCore.Runtime.Extension;
-    using UniModules.UniGame.Core.Runtime.Rx;
-    using UniRx;
+    using UniGame.Runtime.DataFlow;
+    using UniGame.Runtime.Rx;
     using UnityEngine;
 
     [Serializable]
@@ -68,7 +67,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
 
         public virtual bool InterstitialAvailable => IronSource.Agent.isInterstitialReady();
 
-        public IObservable<AdsActionData> AdsAction => _adsAction;
+        public Observable<AdsActionData> AdsAction => _adsAction;
         
         public bool IsInProgress => _isInProgress;
 
@@ -280,7 +279,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
             
             var isInitialized = await _isInitialized
                 .Where(x => x)
-                .AwaitFirstAsync(_lifeTime);
+                .FirstAsync(cancellationToken:_lifeTime.Token);
 
             IronSource.Agent.shouldTrackNetworkState (_adsConfig.shouldTrackNetworkState);
             
@@ -314,9 +313,9 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
         
         private void SubscribeToEvents()
         {
-            Observable.EveryApplicationPause()
-                .Subscribe(x => IronSource.Agent.onApplicationPause(x))
-                .AddTo(_lifeTime);
+            // Observable.EveryApplicationPause()
+            //     .Subscribe(x => IronSource.Agent.onApplicationPause(x))
+            //     .AddTo(_lifeTime);
 
             _adsAction.Subscribe(LoadAdsAction).AddTo(_lifeTime);
             

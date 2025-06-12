@@ -1,13 +1,12 @@
 using Cysharp.Threading.Tasks;
 using Game.Runtime.Game.Liveplay.Ads.Runtime;
-using System;
 using UnityEngine;
 
 namespace VN.Runtime.Ads
 {
+    using R3;
     using UniGame.Core.Runtime;
-    using UniModules.UniCore.Runtime.DataFlow;
-    using UniRx;
+    using UniGame.Runtime.DataFlow;
 
     public class DebugAdsService : IAdsService
     {
@@ -16,7 +15,7 @@ namespace VN.Runtime.Ads
 
         public bool InterstitialAvailable => true;
         private Subject<AdsActionData> _adsAction = new();
-        public IObservable<AdsActionData> AdsAction => _adsAction;
+        public Observable<AdsActionData> AdsAction => _adsAction;
         
         public ILifeTime LifeTime => lifeTime;
 

@@ -2,16 +2,16 @@ using Cysharp.Threading.Tasks;
 using Game.Runtime.Game.Liveplay.Ads.Runtime;
 using System;
 using System.Collections.Generic;
-using UniModules.UniCore.Runtime.DataFlow;
-using UniRx;
 using UnityEngine;
 using YandexMobileAds;
 using YandexMobileAds.Base;
 
 namespace VN.Runtime.Ads
 {
+    using R3;
     using UniCore.Runtime.ProfilerTools;
     using UniGame.Core.Runtime;
+    using UniGame.Runtime.DataFlow;
 
     public class YandexAdsService : IAdsService
     {
@@ -19,7 +19,7 @@ namespace VN.Runtime.Ads
         private PlacementIdDataAsset _placementIds;
         
         private ReactiveCommand<AdsShowResult> _applyRewardedCommand = new();
-        private LifeTimeDefinition _lifeTime;
+        private LifeTime _lifeTime;
         private List<AdsShowResult> _rewardedHistory = new();
         private Dictionary<string, AdsShowResult> _awaitedRewards = new();
         private float _reloadAdsInterval;
@@ -38,12 +38,13 @@ namespace VN.Runtime.Ads
 
         public bool InterstitialAvailable => throw new NotImplementedException();
 
-        public IObservable<AdsActionData> AdsAction => _adsAction;
+        public Observable<AdsActionData> AdsAction => _adsAction;
+        
         public YandexAdsService(YandexAdsConfiguration yandexAdsConfiguration)
         {
-            _lifeTime = new LifeTimeDefinition();
-            
+            _lifeTime = new ();
             _adsConfig = yandexAdsConfiguration;
+            
             if (_adsConfig.EnableAds == false)
                 return;
             
@@ -256,7 +257,7 @@ namespace VN.Runtime.Ads
         }
         public void Dispose()
         {
-            _lifeTime.Terminate();
+            _lifeTime.Release();
 
             if (_rewardedAd == null)
                 return;
