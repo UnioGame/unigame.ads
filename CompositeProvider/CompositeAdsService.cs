@@ -12,7 +12,7 @@ namespace VN.Game.Modules.unigame.levelplay.AdsCommonProvider
     public enum AdsStatus { Ready, Failed, Loading }
     public class CompositeAdsService : IAdsService
     {
-        private LifeTimeDefinition _lifeTime;
+        private LifeTime _lifeTime;
         private List<IAdsService> _adsServices;
         private IAdsService _serviceWithAvailableAds;
         private Subject<AdsActionData> _adsAction;
@@ -22,9 +22,9 @@ namespace VN.Game.Modules.unigame.levelplay.AdsCommonProvider
         public CompositeAdsService(List<IAdsService> services)
         {
             _adsServices = services;
-            _lifeTime = new LifeTimeDefinition();
-            _adsAction = new Subject<AdsActionData>()
-                .AddTo(_lifeTime);
+            _lifeTime = new LifeTime();
+            _adsAction = new Subject<AdsActionData>();
+            _lifeTime.AddDispose(_adsAction);
 
             foreach (var service in _adsServices)
             {

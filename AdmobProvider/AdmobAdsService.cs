@@ -15,7 +15,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
     {
         public const string AdmobSdk = "admob";
         
-        private LifeTimeDefinition _lifeTime;
+        private LifeTime _lifeTime;
         private AdmobAdsConfig _adsConfig;
         private ReactiveValue<bool> _isInitialized = new();
         private PlacementIdDataAsset _placementIds;
@@ -41,7 +41,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
             Debug.Log($"[ADS SERVICE]: admob created");
             
             _adsConfig = config;
-            _lifeTime = new LifeTimeDefinition();
+            _lifeTime = new LifeTime();
             _reloadAdsInterval = config.ReloadAdsInterval;
             _lastAdsReloadTime = -_reloadAdsInterval;
             _placementIds = config.placementIds;

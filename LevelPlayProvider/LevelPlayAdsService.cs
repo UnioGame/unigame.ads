@@ -12,7 +12,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
     [Serializable]
     public class LevelPlayAdsService : IAdsService
     {
-        private LifeTimeDefinition _lifeTime;
+        private LifeTime _lifeTime;
         private LevelPlayAdsConfig _adsConfig;
         private ReactiveValue<bool> _isInitialized = new();
         private PlacementIdDataAsset _placementIds;
@@ -35,7 +35,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
             Debug.Log($"ADS SERVICE: Created");
             
             _adsConfig = config;
-            _lifeTime = new LifeTimeDefinition();
+            _lifeTime = new LifeTime();
             _reloadAdsInterval = config.reloadAdsInterval;
             _lastAdsReloadTime = -_reloadAdsInterval;
             _placementIds = config.placementIds;
