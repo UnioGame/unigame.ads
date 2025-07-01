@@ -1,22 +1,22 @@
-using Cysharp.Threading.Tasks;
-using Game.Runtime.Game.Liveplay.Ads.Runtime;
 using System;
 using System.Collections.Generic;
 using UnityEngine;
-using YandexMobileAds;
-using YandexMobileAds.Base;
 
-namespace VN.Runtime.Ads
+namespace UniGame.Ads.Runtime
 {
+    using System.Linq;
+    using Core.Runtime;
+    using Cysharp.Threading.Tasks;
     using R3;
     using UniCore.Runtime.ProfilerTools;
-    using UniGame.Core.Runtime;
     using UniGame.Runtime.DataFlow;
+    using YandexMobileAds;
+    using YandexMobileAds.Base;
 
+    [Serializable]
     public class YandexAdsService : IAdsService
     {
-        private YandexAdsConfiguration _adsConfig;
-        private PlacementIdDataAsset _placementIds;
+        private PlacementData _placementData;
         
         private ReactiveCommand<AdsShowResult> _applyRewardedCommand = new();
         private LifeTime _lifeTime;
@@ -25,12 +25,14 @@ namespace VN.Runtime.Ads
         private float _reloadAdsInterval;
         private float _lastAdsReloadTime;
         private bool _loadingAds;
-        private bool _isInProgress = new();
+        private bool _isInProgress;
         private string _activePlacement = string.Empty;
 
         private Subject<AdsActionData> _adsAction = new();
         private RewardedAdLoader _rewardedAdLoader;
         private RewardedAd _rewardedAd;
+        private readonly AdsPlatformId _platformId;
+        private AdsDataConfiguration _adsConfig;
 
         public ILifeTime LifeTime => _lifeTime;
         
@@ -40,16 +42,14 @@ namespace VN.Runtime.Ads
 
         public Observable<AdsActionData> AdsAction => _adsAction;
         
-        public YandexAdsService(YandexAdsConfiguration yandexAdsConfiguration)
+        public YandexAdsService(AdsPlatformId platformId,AdsDataConfiguration configuration)
         {
             _lifeTime = new ();
-            _adsConfig = yandexAdsConfiguration;
-            
-            if (_adsConfig.EnableAds == false)
-                return;
-            
-            _placementIds = yandexAdsConfiguration.placementIds;
-            _reloadAdsInterval = yandexAdsConfiguration.ReloadAdsInterval;
+            _platformId = platformId;
+            _adsConfig = configuration;
+
+            _placementData = configuration.placementData;
+            _reloadAdsInterval = configuration.reloadAdsInterval;
             _lastAdsReloadTime = -_reloadAdsInterval;
 
             Initialize();
@@ -57,13 +57,25 @@ namespace VN.Runtime.Ads
         private void Initialize()
         {
             SubscribeToEvents();
+            
             _rewardedAdLoader = new RewardedAdLoader();
-            _rewardedAdLoader.OnAdFailedToLoad += YandexRewardAdFailedToLoad;
-            _rewardedAdLoader.OnAdLoaded += YandexRewardAdLoaded;
 
-            _applyRewardedCommand
-                .Subscribe(ApplyRewardedCommand)
-                .AddTo(_lifeTime);
+            var failedLoadDisposable = Observable
+                .FromEvent(x => _rewardedAdLoader.OnAdFailedToLoad += YandexRewardAdFailedToLoad,
+                x => _rewardedAdLoader.OnAdFailedToLoad -= YandexRewardAdFailedToLoad)
+                .Subscribe();
+
+            _lifeTime.AddDispose(failedLoadDisposable);
+            
+            var rewardedLoaded = Observable
+                .FromEvent(x => _rewardedAdLoader.OnAdLoaded += YandexRewardAdLoaded,
+                    x => _rewardedAdLoader.OnAdLoaded -= YandexRewardAdLoaded)
+                .Subscribe();
+            
+            _lifeTime.AddDispose(rewardedLoaded);
+
+            LifetimeExtension.AddTo(_applyRewardedCommand
+                    .Subscribe(ApplyRewardedCommand), _lifeTime);
 
             LoadAdsAsync()
                 .AttachExternalCancellation(_lifeTime.Token)
@@ -83,25 +95,29 @@ namespace VN.Runtime.Ads
 
             _awaitedRewards[placeId] = result;
         }
+        
         public async UniTask<bool> IsPlacementAvailable(string placementName)
         {
-            var adsPlacementItem = _placementIds.GetPlatformPlacementByName(placementName);
+            var adsPlacementItem = _placementData.GetPlatformPlacementByName(placementName);
             if (adsPlacementItem.Equals(default(AdsPlacementItem)))
             {
                 GameLog.Log($"Yandex Ads Service: have't ads placement item with name {placementName}", Color.red);
                 return false;   
             }
-            GameLog.Log($"Yandex Ads Service: have ads placement item with name {adsPlacementItem.Name}", Color.green);
+            
+            GameLog.Log($"Yandex Ads Service: have ads placement item with name {adsPlacementItem.name}", Color.green);
 
-            var placementId = adsPlacementItem.GetPlacementIdByPlatform(_adsConfig.PlacementPlatfrom);
+            var placementId = adsPlacementItem.GetPlacementIdByPlatform(_platformId);
+            
             if (string.IsNullOrEmpty(placementId))
             {
                 GameLog.Log($"Yandex Ads Service: have't override placement for {placementName}", Color.red);
                 return false;
             }
+            
             GameLog.Log($"Yandex Ads Service: have override placement is {placementId}", Color.green);
             
-            var placementType = adsPlacementItem.Type;
+            var placementType = adsPlacementItem.type;
             switch (placementType)
             {
                 case PlacementType.Rewarded:
@@ -132,8 +148,9 @@ namespace VN.Runtime.Ads
 
             _lastAdsReloadTime = Time.realtimeSinceStartup;
 
+            var rewarded = GetRewardedPlacement();
             var adRequestConfiguration = new AdRequestConfiguration
-                .Builder(_adsConfig.GetRewardedPlacement().GetPlacementIdByPlatform(_adsConfig.PlacementPlatfrom))
+                .Builder(rewarded.GetPlacementIdByPlatform(_platformId))
                 .Build();
             
             _rewardedAdLoader.LoadAd(adRequestConfiguration);
@@ -141,9 +158,19 @@ namespace VN.Runtime.Ads
             _loadingAds = false;
         }
 
+        public AdsPlacementItem GetRewardedPlacement()
+        {
+            return _adsConfig.placementData
+                .placements
+                .FirstOrDefault(x => x.type == PlacementType.Rewarded);
+        }
+
         public async UniTask<AdsShowResult> Show(string placement, PlacementType type)
         {
-            placement = _placementIds.GetPlatformPlacementByName(placement).GetPlacementIdByPlatform(_adsConfig.PlacementPlatfrom);
+            placement = _placementData
+                .GetPlatformPlacementByName(placement)
+                .GetPlacementIdByPlatform(_platformId);
+            
             _activePlacement = placement;
             
             GameLog.Log($"Yandex Ads Service: show placement: {placement}. Id: {type}", Color.yellow);
@@ -253,7 +280,7 @@ namespace VN.Runtime.Ads
 
         private void SubscribeToEvents()
         {
-            _adsAction.Subscribe(LoadAdsAction).AddTo(_lifeTime);
+            LifetimeExtension.AddTo(_adsAction.Subscribe(LoadAdsAction), _lifeTime);
         }
         public void Dispose()
         {

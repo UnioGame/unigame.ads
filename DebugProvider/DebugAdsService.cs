@@ -1,8 +1,8 @@
 using Cysharp.Threading.Tasks;
-using Game.Runtime.Game.Liveplay.Ads.Runtime;
+using UniGame.Ads.Runtime;
 using UnityEngine;
 
-namespace VN.Runtime.Ads
+namespace UniGame.Ads.Runtime
 {
     using R3;
     using UniGame.Core.Runtime;
@@ -35,7 +35,7 @@ namespace VN.Runtime.Ads
             await UniTask.DelayFrame(1);
         }
 
-        public async UniTask<AdsShowResult> Show(PlacementAdsId placement)
+        public async UniTask<AdsShowResult> Show(AdsPlacementId placement)
         {
             AdsShowResult result = new AdsShowResult()
             {

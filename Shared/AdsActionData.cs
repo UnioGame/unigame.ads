@@ -1,4 +1,4 @@
-﻿namespace Game.Runtime.Game.Liveplay.Ads.Runtime
+﻿namespace UniGame.Ads.Runtime
 {
 	public struct AdsActionData
 	{

@@ -4,12 +4,12 @@ namespace VN.Game.Modules.unigame.levelplay.AdsCommonProvider
     using System.Collections.Generic;
     using System.Linq;
     using Cysharp.Threading.Tasks;
-    using global::Game.Runtime.Game.Liveplay.Ads.Runtime;
+    using global::UniGame.Ads.Runtime;
     using R3;
     using UniGame.Core.Runtime;
     using UniGame.Runtime.DataFlow;
 
-    public enum AdsStatus { Ready, Failed, Loading }
+    
     public class CompositeAdsService : IAdsService
     {
         private LifeTime _lifeTime;
@@ -95,7 +95,7 @@ namespace VN.Game.Modules.unigame.levelplay.AdsCommonProvider
             throw new NotImplementedException();
         }
 
-        public UniTask<AdsShowResult> Show(PlacementAdsId placement)
+        public UniTask<AdsShowResult> Show(AdsPlacementId placement)
         {
             throw new NotImplementedException();
         }
@@ -115,4 +115,6 @@ namespace VN.Game.Modules.unigame.levelplay.AdsCommonProvider
             throw new NotImplementedException();
         }
     }
+    
+    public enum AdsStatus { Ready, Failed, Loading }
 }

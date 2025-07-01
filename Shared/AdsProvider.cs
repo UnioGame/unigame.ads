@@ -2,7 +2,7 @@
 {
     using System;
     using Cysharp.Threading.Tasks;
-    using Game.Runtime.Game.Liveplay.Ads.Runtime;
+    using UniGame.Ads.Runtime;
     using UniGame.Core.Runtime;
 
     [Serializable]

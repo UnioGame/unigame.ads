@@ -1,24 +1,25 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace Game.Runtime.Game.Liveplay.Ads.Runtime
+namespace UniGame.Ads.Runtime
 {
-    using System.Linq;
-    using Modules.unigame.levelplay.Shared;
-
     [Serializable]
-    public struct AdsPlacementItem
+    public class AdsPlacementItem
     {
-        public int Id;
-        public string Name;
-        public List<AdsPlacementPlatformItem> Placements;
-        public PlacementType Type;
-        public string GetPlacementIdByPlatform(PlacementPlatfrom platform)
+        public int id;
+        public string name = string.Empty;
+        public string description;
+        
+        public List<AdsPlatformPlacement> placements =new();
+        
+        public PlacementType type;
+        
+        public string GetPlacementIdByPlatform(string platform)
         {
-            foreach (var item in Placements)
+            foreach (var item in placements)
             {
-                if (item.Platfrom == platform)
-                    return item.PlacementId;
+                if (item.platform == platform)
+                    return item.placementId;
             }
 
             return default;
@@ -26,10 +27,9 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
     }
 
     [Serializable]
-    public class AdsPlacementPlatformItem
+    public class AdsPlatformPlacement
     {
-        public PlacementPlatfrom Platfrom;
-        public string PlacementId;
-
+        public string placementId;
+        public AdsPlatformId platform;
     }
 }

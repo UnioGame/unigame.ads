@@ -1,4 +1,4 @@
-namespace Game.Runtime.Game.Liveplay.Ads.Runtime
+namespace UniGame.Ads.Runtime
 {
     using System;
     using System.Collections.Generic;
@@ -11,44 +11,44 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
 #endif
 
     [Serializable]
-    [ValueDropdown("@Game.Runtime.Game.Liveplay.Ads.Runtime.PlacementAdsId.GetPlacementIds()", IsUniqueList = true, DropdownTitle = "PlacementId")]
-    public struct PlacementAdsId
+    [ValueDropdown("@UniGame.Ads.Runtime.AdsPlacementId.GetPlacementIds()", IsUniqueList = true, DropdownTitle = "PlacementId")]
+    public struct AdsPlacementId
     {
         [SerializeField]
         public int value;
 
         #region static editor data
 
-        private static PlacementIdDataAsset _dataAsset;
+        private static AdsDataConfigurationAsset _dataAsset;
 
-        public static IEnumerable<ValueDropdownItem<PlacementAdsId>> GetPlacementIds()
+        public static IEnumerable<ValueDropdownItem<AdsPlacementId>> GetPlacementIds()
         {
 #if UNITY_EDITOR
-            // _dataAsset ??= AssetEditorTools.GetAsset<PlacementIdDataAsset>();
-            var types = _dataAsset;
-            if (types == null)
+             _dataAsset ??= AssetEditorTools.GetAsset<AdsDataConfigurationAsset>();
+            var config = _dataAsset.configuration;
+            if (config == null)
             {
-                yield return new ValueDropdownItem<PlacementAdsId>()
+                yield return new ValueDropdownItem<AdsPlacementId>()
                 {
                     Text = "EMPTY",
-                    Value = (PlacementAdsId)0,
+                    Value = (AdsPlacementId)0,
                 };
                 yield break;
             }
 
-            foreach (var type in types.Placements)
+            foreach (var type in config.placementData.placements)
             {
-                yield return new ValueDropdownItem<PlacementAdsId>()
+                yield return new ValueDropdownItem<AdsPlacementId>()
                 {
-                    Text = type.Name,
-                    Value = (PlacementAdsId)type.Id,
+                    Text = type.name,
+                    Value = (AdsPlacementId)type.id,
                 };
             }
 #endif
             yield break;
         }
 
-        public static string GetPlacementIdName(PlacementAdsId slotId)
+        public static string GetPlacementIdName(AdsPlacementId slotId)
         {
 #if UNITY_EDITOR
             var types = GetPlacementIds();
@@ -68,21 +68,21 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
 
         #endregion
 
-        public static implicit operator int(PlacementAdsId v)
+        public static implicit operator int(AdsPlacementId v)
         {
             return v.value;
         }
 
-        public static explicit operator PlacementAdsId(int v)
+        public static explicit operator AdsPlacementId(int v)
         {
-            return new PlacementAdsId { value = v };
+            return new AdsPlacementId { value = v };
         }
 
         public override string ToString() => value.ToString();
 
         public override int GetHashCode() => value;
 
-        public PlacementAdsId FromInt(int data)
+        public AdsPlacementId FromInt(int data)
         {
             value = data;
 
@@ -91,7 +91,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
 
         public override bool Equals(object obj)
         {
-            if (obj is PlacementAdsId mask)
+            if (obj is AdsPlacementId mask)
                 return mask.value == value;
 
             return false;
