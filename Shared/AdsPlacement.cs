@@ -15,8 +15,6 @@ namespace UniGame.Ads.Runtime
         [ListDrawerSettings(ListElementLabelName = "@placement")]
         public List<PlatformPlacementData> placements =new();
         
-        public PlacementType type;
-        
         public string GetPlacementIdByPlatform(string platform)
         {
             foreach (var item in placements)

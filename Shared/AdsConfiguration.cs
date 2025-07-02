@@ -13,7 +13,8 @@
         public bool waitForInitialization = true;
         
         [Header("Placements")]
-        [InlineEditor]
+        [InlineProperty]
+        [HideLabel]
         public AdsDataConfiguration adsData;
 
         [Header("Providers")]
@@ -21,7 +22,7 @@
         [Tooltip("default ads provider to use")]
         public string defaultProvider = string.Empty;
 		
-        [ListDrawerSettings(ListElementLabelName = "@providerName")]
+        [ListDrawerSettings(ListElementLabelName = "@adsPlatformName")]
         [SerializeReference]
         public List<AdsProvider> providers =new();
         
@@ -47,7 +48,7 @@
                     {
                         id = placement.id,
                         platformPlacement = platformData.placement,
-                        placementType = placement.type,
+                        placementType = placement.placementType,
                         platform = platformData.platform,
                     };
 

@@ -1,4 +1,4 @@
-﻿namespace Game.Runtime.Game.Liveplay.Ads.Runtime
+﻿namespace UniGame.Ads.Runtime
 {
 	using System;
 	using System.Collections.Generic;
@@ -7,17 +7,9 @@
 	[Serializable]
 	public class LevelPlayAdsConfig
 	{
-		public bool enableAds = true;
-		
-		public string LivePlayAppKey = "1ece5c335";
-	
+		public string livePlayAppKey = "put_your_levelplay_app_key_here";
 		public bool validateIntegration = true;
 		public bool shouldTrackNetworkState = false;
 		public float reloadAdsInterval = 30f;
-
-		[BoxGroup("placements")]
-		[InlineEditor]
-		[HideLabel]
-		public PlacementIdDataAsset placementIds;
 	}
 }

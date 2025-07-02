@@ -81,7 +81,7 @@ namespace UniGame.Ads.Runtime
 
         public override string ToString() => value;
 
-        public override int GetHashCode() => value.GetHashCode();
+        public override int GetHashCode() => value == null ? 0 : value.GetHashCode();
 
         public AdsPlatformId FromString(string data)
         {

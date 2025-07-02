@@ -7,6 +7,7 @@ namespace UniGame.Ads.Runtime
     public class AdsConfigurationAsset : ScriptableObject
     {
         [InlineProperty]
+        [HideLabel]
         public AdsConfiguration configuration = new ();
     }
 }

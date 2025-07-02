@@ -1,8 +1,9 @@
-namespace Game.Runtime.Game.Liveplay.Ads.Runtime
+namespace UniGame.Ads.Runtime
 {
     using System;
     using System.Collections.Generic;
     using Cysharp.Threading.Tasks;
+    using Game.Modules.unigame.ads.Shared;
     using R3;
     using UniGame.Core.Runtime;
     using UniGame.Runtime.DataFlow;
@@ -13,67 +14,62 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
     public class LevelPlayAdsService : IAdsService
     {
         private LifeTime _lifeTime;
+        private readonly string _platformName;
         private LevelPlayAdsConfig _adsConfig;
         private ReactiveValue<bool> _isInitialized = new();
-        private PlacementIdDataAsset _placementIds;
-        
+
         private string _activePlacement = string.Empty;
         private bool _isInProgress;
         private float _reloadAdsInterval;
         private float _lastAdsReloadTime;
         private bool _loadingAds;
-        
+
         private List<AdsShowResult> _rewardedHistory = new();
-        private Dictionary<string,AdsShowResult> _awaitedRewards = new();
+        private Dictionary<string, AdsShowResult> _awaitedRewards = new();
         private ReactiveCommand<AdsShowResult> _applyRewardedCommand = new();
         private Subject<AdsActionData> _adsAction = new();
-        private Dictionary<string, AdsPlacementItem> _placements = new();
-        private Dictionary<PlacementAdsId, AdsPlacementItem> _idPlacements = new();
-        
-        public LevelPlayAdsService(LevelPlayAdsConfig config)
+        private Dictionary<string, PlatformAdsPlacement> _placements = new();
+
+        public LevelPlayAdsService(
+            string platformName,
+            LevelPlayAdsConfig config,
+            AdsConfiguration configuration,
+            Dictionary<string, PlatformAdsPlacement> placements)
         {
-            Debug.Log($"ADS SERVICE: Created");
-            
+            _platformName = platformName;
             _adsConfig = config;
             _lifeTime = new LifeTime();
             _reloadAdsInterval = config.reloadAdsInterval;
             _lastAdsReloadTime = -_reloadAdsInterval;
-            _placementIds = config.placementIds;
+            _placements = placements;
 
-            foreach (var adsPlacementId in _placementIds.Placements)
-            {
-                _placements[adsPlacementId.Name] = adsPlacementId;
-                _idPlacements[(PlacementAdsId)adsPlacementId.Id] = adsPlacementId;
-            }
-            
-            if(_adsConfig.enableAds == false) return;
-            
             SubscribeToEvents();
-            
+
             InitializeAsync().Forget();
         }
-        
+
         public ILifeTime LifeTime => _lifeTime;
 
         public void LoadAdsAction(AdsActionData actionData)
         {
             IronSource.Agent.loadRewardedVideo();
 
-            var debugMessage = $"[Ads Service] Action: {actionData.PlacementName} {actionData.PlacementType} {actionData.Message} {actionData.ActionType}";
+            var debugMessage =
+                $"[Ads Service] Action: {actionData.PlacementName} {actionData.PlacementType} {actionData.Message} {actionData.ActionType}";
             Debug.Log(debugMessage);
         }
-        
+
         public virtual bool RewardedAvailable => IronSource.Agent.isRewardedVideoAvailable();
 
         public virtual bool InterstitialAvailable => IronSource.Agent.isInterstitialReady();
 
         public Observable<AdsActionData> AdsAction => _adsAction;
-        
+
         public bool IsInProgress => _isInProgress;
 
-        public async UniTask<AdsShowResult> Show(PlacementAdsId placementAdsId)
+        public async UniTask<AdsShowResult> Show(string placementAdsId)
         {
-            if (!_idPlacements.TryGetValue(placementAdsId, out var placementItem))
+            if (!_placements.TryGetValue(placementAdsId, out var placementItem))
             {
                 return new AdsShowResult
                 {
@@ -84,8 +80,8 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                     Rewarded = false,
                 };
             }
-            
-            var showResult = await Show(placementItem.Name, PlacementType.Rewarded);
+
+            var showResult = await Show(placementItem.platformPlacement, PlacementType.Rewarded);
             return showResult;
         }
 
@@ -107,40 +103,40 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
 
             _isInProgress = true;
             _activePlacement = placeId;
-            
+
             _adsAction.OnNext(new AdsActionData()
             {
                 PlacementName = placeId,
                 Message = string.Empty,
                 ActionType = PlacementActionType.Requested,
-                PlacementType =type,
+                PlacementType = type,
             });
 
             if (!await IsPlacementAvailable(placeId))
             {
-                AddPlacementResult(placeId,type,false,true,AdsMessages.PlacementCapped);
+                AddPlacementResult(placeId, type, false, true, AdsMessages.PlacementCapped);
             }
             else
             {
                 ShowPlacement(placeId, type);
             }
-            
+
             await UniTask
                 .WaitWhile(() => _awaitedRewards.ContainsKey(placeId) == false)
                 .AttachExternalCancellation(_lifeTime.Token);
 
             var placementResult = _awaitedRewards[placeId];
-            
+
             _awaitedRewards.Remove(placeId);
             _isInProgress = false;
-            
+
             return placementResult;
         }
 
         public void ShowPlacement(string placeId, PlacementType type)
         {
             Debug.Log($"ADS SERVICE: Show {placeId} : {type}");
-            
+
             switch (type)
             {
                 case PlacementType.Rewarded:
@@ -150,33 +146,32 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                     IronSource.Agent.showInterstitial(placeId);
                     break;
                 case PlacementType.Banner:
-                    AddPlacementResult(placeId,type,false,true,AdsMessages.PlacementCapped);
+                    AddPlacementResult(placeId, type, false, true, AdsMessages.PlacementCapped);
                     break;
             }
         }
-        
+
         public void ValidateIntegration()
         {
             Debug.Log($"ADS SERVICE: ValidateIntegration");
 
             IronSource.Agent.validateIntegration();
         }
-        
+
         public async UniTask<AdsShowResult> Show(PlacementType type)
         {
-            AdsPlacementItem adsPlacementId = default;
+            PlatformAdsPlacement adsPlacementId = default;
             foreach (var placement in _placements)
             {
                 var placementValue = placement.Value;
-                if(placementValue.Type != type)
-                    continue;
-                if(await IsPlacementAvailable(placementValue.Name) == false)
+                if (placementValue.placementType != type) continue;
+                if (await IsPlacementAvailable(placementValue.platformPlacement) == false)
                     continue;
                 adsPlacementId = placementValue;
                 break;
             }
 
-            if (string.IsNullOrEmpty(adsPlacementId.Name))
+            if (adsPlacementId == null)
             {
                 return new AdsShowResult
                 {
@@ -187,11 +182,11 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                     Rewarded = false,
                 };
             }
-            
-            var showResult = await Show(adsPlacementId.Name, PlacementType.Rewarded);
+
+            var showResult = await Show(adsPlacementId.platformPlacement, PlacementType.Rewarded);
             return showResult;
         }
-        
+
         public virtual async UniTask<AdsShowResult> ShowRewardedAdAsync(string placeId)
         {
             var showResult = await Show(placeId, PlacementType.Rewarded);
@@ -203,56 +198,69 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
             var showResult = await Show(placeId, PlacementType.Interstitial);
             return showResult;
         }
-        
+
         public async UniTask<bool> IsPlacementAvailable(string placementName)
         {
-            if(_placements.TryGetValue(placementName,out var adsPlacementId) == false)
+            if (_placements.TryGetValue(placementName, out var adsPlacementId) == false)
             {
                 Debug.Log($"Placement haven't {placementName}");
                 return false;
             }
-            var placementType = adsPlacementId.Type;
-            
+
+            var placementType = adsPlacementId.placementType;
+
             switch (placementType)
             {
                 case PlacementType.Rewarded:
-                    {
-                        Debug.Log($"Rewarded available: {RewardedAvailable} & Capped: {IronSource.Agent.isRewardedVideoPlacementCapped(placementName)}");
+                {
                     return RewardedAvailable &&
                            IronSource.Agent.isRewardedVideoPlacementCapped(placementName) == false;
-                    }
+                }
                 case PlacementType.Interstitial:
                     return InterstitialAvailable;
             }
-            
+
+            return false;
+        }
+
+        public async UniTask<bool> IsPlacementAvailable(PlacementType placementType)
+        {
+            foreach (var placement in _placements)
+            {
+                var value = placement.Value;
+                if(value.placementType != placementType) continue;
+                if (await IsPlacementAvailable(value.platformPlacement))
+                    return true;
+            }
+
             return false;
         }
 
         public virtual async UniTask LoadAdsAsync()
         {
             if (_loadingAds || _lifeTime.IsTerminated) return;
-            
+
             _loadingAds = true;
-            
+
             var delay = Time.realtimeSinceStartup - _lastAdsReloadTime;
             delay = delay > _reloadAdsInterval ? 0 : _reloadAdsInterval - delay;
             delay = Mathf.Max(0, delay);
-            
+
             await UniTask.Delay(TimeSpan.FromSeconds(delay))
                 .AttachExternalCancellation(_lifeTime.Token);
-            
+
             _lastAdsReloadTime = Time.realtimeSinceStartup;
-            
+
             IronSource.Agent.loadRewardedVideo();
             IronSource.Agent.loadInterstitial();
-            
+
             _loadingAds = false;
         }
-        
+
         public void Dispose()
         {
             _lifeTime.Terminate();
-            
+
             IronSourceRewardedVideoEvents.onAdOpenedEvent -= RewardedVideoOnAdOpenedEvent;
             IronSourceRewardedVideoEvents.onAdClosedEvent -= RewardedVideoOnAdClosedEvent;
             IronSourceRewardedVideoEvents.onAdAvailableEvent -= RewardedVideoOnAdAvailable;
@@ -260,7 +268,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
             IronSourceRewardedVideoEvents.onAdShowFailedEvent -= RewardedVideoOnAdShowFailedEvent;
             IronSourceRewardedVideoEvents.onAdRewardedEvent -= RewardedVideoOnAdRewardedEvent;
             IronSourceRewardedVideoEvents.onAdClickedEvent -= RewardedVideoOnAdClickedEvent;
-            
+
             IronSourceInterstitialEvents.onAdReadyEvent -= InterstitialOnAdReadyEvent;
             IronSourceInterstitialEvents.onAdLoadFailedEvent -= InterstitialOnAdLoadFailed;
             IronSourceInterstitialEvents.onAdOpenedEvent -= InterstitialOnAdOpenedEvent;
@@ -269,20 +277,20 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
             IronSourceInterstitialEvents.onAdShowFailedEvent -= InterstitialOnAdShowFailedEvent;
             IronSourceInterstitialEvents.onAdClosedEvent -= InterstitialOnAdClosedEvent;
         }
-        
+
 
         private async UniTask InitializeAsync()
         {
             Debug.Log($"[Ads Service] initialization started");
-            
-            IronSource.Agent.init (_adsConfig.LivePlayAppKey);
-            
+
+            IronSource.Agent.init(_adsConfig.livePlayAppKey);
+
             var isInitialized = await _isInitialized
                 .Where(x => x)
-                .FirstAsync(cancellationToken:_lifeTime.Token);
+                .FirstAsync(cancellationToken: _lifeTime.Token);
 
-            IronSource.Agent.shouldTrackNetworkState (_adsConfig.shouldTrackNetworkState);
-            
+            IronSource.Agent.shouldTrackNetworkState(_adsConfig.shouldTrackNetworkState);
+
             Debug.Log($"[Ads Service] initialized {isInitialized}");
 
             if (_adsConfig.validateIntegration)
@@ -291,13 +299,14 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
             _applyRewardedCommand
                 .Subscribe(ApplyRewardedCommand)
                 .AddTo(_lifeTime);
-            
+
             LoadAdsAsync()
                 .AttachExternalCancellation(_lifeTime.Token)
                 .Forget();
         }
 
-        private void AddPlacementResult(string placeId, PlacementType type,bool rewarded, bool error = false,string message = "")
+        private void AddPlacementResult(string placeId, PlacementType type, bool rewarded, bool error = false,
+            string message = "")
         {
             var result = new AdsShowResult
             {
@@ -310,7 +319,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
 
             _awaitedRewards[placeId] = result;
         }
-        
+
         private void SubscribeToEvents()
         {
             // Observable.EveryApplicationPause()
@@ -318,9 +327,9 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
             //     .AddTo(_lifeTime);
 
             _adsAction.Subscribe(LoadAdsAction).AddTo(_lifeTime);
-            
+
             IronSourceEvents.onSdkInitializationCompletedEvent += SdkInitializationCompletedEvent;
-            
+
             //add AdInfo Rewarded Video Events
             IronSourceRewardedVideoEvents.onAdOpenedEvent += RewardedVideoOnAdOpenedEvent;
             IronSourceRewardedVideoEvents.onAdClosedEvent += RewardedVideoOnAdClosedEvent;
@@ -329,7 +338,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
             IronSourceRewardedVideoEvents.onAdShowFailedEvent += RewardedVideoOnAdShowFailedEvent;
             IronSourceRewardedVideoEvents.onAdRewardedEvent += RewardedVideoOnAdRewardedEvent;
             IronSourceRewardedVideoEvents.onAdClickedEvent += RewardedVideoOnAdClickedEvent;
-            
+
             //add Interstitial AdInfo Events
             IronSourceInterstitialEvents.onAdReadyEvent += InterstitialOnAdReadyEvent;
             IronSourceInterstitialEvents.onAdLoadFailedEvent += InterstitialOnAdLoadFailed;
@@ -339,35 +348,37 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
             IronSourceInterstitialEvents.onAdShowFailedEvent += InterstitialOnAdShowFailedEvent;
             IronSourceInterstitialEvents.onAdClosedEvent += InterstitialOnAdClosedEvent;
         }
-        
+
         private void ShowRewardedVideo(string placeId)
         {
             var isVideoAvailable = IronSource.Agent.isRewardedVideoAvailable();
             if (isVideoAvailable == false)
             {
-                var rewardedResult = new AdsShowResult { 
-                    PlacementName = placeId, 
-                    Rewarded = false, 
+                var rewardedResult = new AdsShowResult
+                {
+                    PlacementName = placeId,
+                    Rewarded = false,
                     Error = true,
                     Message = AdsMessages.RewardedUnavailable
                 };
                 _applyRewardedCommand.Execute(rewardedResult);
                 return;
             }
-            
+
             var placementCapped = IronSource.Agent.isRewardedVideoPlacementCapped(placeId);
             if (placementCapped)
             {
-                var rewardedResult = new AdsShowResult { 
-                    PlacementName = placeId, 
-                    Rewarded = false, 
+                var rewardedResult = new AdsShowResult
+                {
+                    PlacementName = placeId,
+                    Rewarded = false,
                     Error = true,
                     Message = AdsMessages.RewardedPlacementCapped
                 };
                 _applyRewardedCommand.Execute(rewardedResult);
                 return;
             }
-            
+
             IronSource.Agent.showRewardedVideo(placeId);
         }
 
@@ -380,7 +391,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
             else
                 _awaitedRewards.Add(result.PlacementName, result);
         }
-        
+
         /************* RewardedVideo AdInfo Delegates *************/
         // Indicates that there’s an available ad.
         // The adInfo object includes information about the ad that was loaded successfully
@@ -395,10 +406,10 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                 PlacementType = PlacementType.Rewarded,
             });
         }
-        
+
         // Indicates that no ads are available to be displayed
         // This replaces the RewardedVideoAvailabilityChangedEvent(false) event
-        private void RewardedVideoOnAdUnavailable() 
+        private void RewardedVideoOnAdUnavailable()
         {
             _adsAction.OnNext(new AdsActionData()
             {
@@ -407,10 +418,10 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                 ActionType = PlacementActionType.Unavailable,
                 PlacementType = PlacementType.Rewarded,
             });
-            
+
             LoadAdsAsync().Forget();
         }
-        
+
         // The Rewarded Video ad view has opened. Your activity will loose focus.
         private void RewardedVideoOnAdOpenedEvent(IronSourceAdInfo adInfo)
         {
@@ -422,23 +433,24 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                 PlacementType = PlacementType.Rewarded,
             });
         }
-        
+
         // The Rewarded Video ad view is about to be closed. Your activity will regain its focus.
         private void RewardedVideoOnAdClosedEvent(IronSourceAdInfo adInfo)
         {
             var placement = adInfo.adUnit;
-            
-            if(!_awaitedRewards.TryGetValue(placement,out var result))
+
+            if (!_awaitedRewards.TryGetValue(placement, out var result))
             {
-                var rewardedResult = new AdsShowResult { 
-                    PlacementName = _activePlacement, 
+                var rewardedResult = new AdsShowResult
+                {
+                    PlacementName = _activePlacement,
                     Rewarded = false,
                     Error = false,
                     Message = AdsMessages.RewardedPlacementCapped
                 };
                 _applyRewardedCommand.Execute(rewardedResult);
             }
-            
+
             _adsAction.OnNext(new AdsActionData()
             {
                 PlacementName = _activePlacement,
@@ -447,23 +459,24 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                 PlacementType = PlacementType.Rewarded,
             });
         }
-        
+
         // The user completed to watch the video, and should be rewarded.
         // The placement parameter will include the reward data.
         // When using server-to-server callbacks, you may ignore this event and wait for the ironSource server callback.
         private void RewardedVideoOnAdRewardedEvent(IronSourcePlacement placement, IronSourceAdInfo adInfo)
         {
             var placementId = placement.getPlacementName();
-            
-            var rewardedResult = new AdsShowResult { 
-                PlacementName = placementId, 
+
+            var rewardedResult = new AdsShowResult
+            {
+                PlacementName = placementId,
                 Rewarded = true,
                 Error = false,
                 Message = AdsMessages.RewardedPlacementCapped
             };
-            
+
             _applyRewardedCommand.Execute(rewardedResult);
-            
+
             _adsAction.OnNext(new AdsActionData()
             {
                 PlacementName = placementId,
@@ -472,7 +485,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                 PlacementType = PlacementType.Rewarded,
             });
         }
-        
+
         // The rewarded video ad was failed to show.
         private void RewardedVideoOnAdShowFailedEvent(IronSourceError error, IronSourceAdInfo adInfo)
         {
@@ -484,10 +497,10 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                 ActionType = PlacementActionType.Failed,
                 PlacementType = PlacementType.Rewarded,
             });
-            
+
             LoadAdsAsync().Forget();
         }
-        
+
         // Invoked when the video ad was clicked.
         // This callback is not supported by all networks, and we recommend using it only if
         // it’s supported by all networks you included in your build.
@@ -501,10 +514,10 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                 PlacementType = PlacementType.Rewarded,
             });
         }
-        
+
         /************* Interstitial AdInfo Delegates *************/
         // Invoked when the interstitial ad was loaded succesfully.
-        private void InterstitialOnAdReadyEvent(IronSourceAdInfo adInfo) 
+        private void InterstitialOnAdReadyEvent(IronSourceAdInfo adInfo)
         {
             _adsAction.OnNext(new AdsActionData()
             {
@@ -513,11 +526,11 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                 ErrorCode = 0,
                 ActionType = PlacementActionType.Available,
                 PlacementType = PlacementType.Interstitial,
-            });    
+            });
         }
-        
+
         // Invoked when the initialization process has failed.
-        private void InterstitialOnAdLoadFailed(IronSourceError ironSourceError) 
+        private void InterstitialOnAdLoadFailed(IronSourceError ironSourceError)
         {
             _adsAction.OnNext(new AdsActionData()
             {
@@ -527,12 +540,12 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                 ActionType = PlacementActionType.Opened,
                 PlacementType = PlacementType.Interstitial,
             });
-            
+
             LoadAdsAsync().Forget();
         }
-        
+
         // Invoked when the Interstitial Ad Unit has opened. This is the impression indication. 
-        private void InterstitialOnAdOpenedEvent(IronSourceAdInfo adInfo) 
+        private void InterstitialOnAdOpenedEvent(IronSourceAdInfo adInfo)
         {
             _adsAction.OnNext(new AdsActionData()
             {
@@ -542,9 +555,9 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                 PlacementType = PlacementType.Interstitial,
             });
         }
-        
+
         // Invoked when end user clicked on the interstitial ad
-        private void InterstitialOnAdClickedEvent(IronSourceAdInfo adInfo) 
+        private void InterstitialOnAdClickedEvent(IronSourceAdInfo adInfo)
         {
             _adsAction.OnNext(new AdsActionData()
             {
@@ -554,8 +567,9 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                 PlacementType = PlacementType.Interstitial,
             });
         }
+
         // Invoked when the ad failed to show.
-        private void InterstitialOnAdShowFailedEvent(IronSourceError ironSourceError, IronSourceAdInfo adInfo) 
+        private void InterstitialOnAdShowFailedEvent(IronSourceError ironSourceError, IronSourceAdInfo adInfo)
         {
             _adsAction.OnNext(new AdsActionData()
             {
@@ -566,9 +580,9 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                 ErrorCode = ironSourceError.getErrorCode(),
             });
         }
-        
+
         // Invoked when the interstitial ad closed and the user went back to the application screen.
-        private void InterstitialOnAdClosedEvent(IronSourceAdInfo adInfo) 
+        private void InterstitialOnAdClosedEvent(IronSourceAdInfo adInfo)
         {
             _adsAction.OnNext(new AdsActionData()
             {
@@ -578,11 +592,11 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                 PlacementType = PlacementType.Interstitial,
             });
         }
-        
+
         // Invoked before the interstitial ad was opened, and before the InterstitialOnAdOpenedEvent is reported.
         // This callback is not supported by all networks, and we recommend using it only if  
         // it's supported by all networks you included in your build. 
-        private void InterstitialOnAdShowSucceededEvent(IronSourceAdInfo adInfo) 
+        private void InterstitialOnAdShowSucceededEvent(IronSourceAdInfo adInfo)
         {
             _adsAction.OnNext(new AdsActionData()
             {

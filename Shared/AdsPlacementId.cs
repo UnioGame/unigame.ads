@@ -80,7 +80,7 @@ namespace UniGame.Ads.Runtime
 
         public override string ToString() => value.ToString();
 
-        public override int GetHashCode() => value.GetHashCode();
+        public override int GetHashCode() => value == null ? 0 : value.GetHashCode();
 
         public AdsPlacementId FromString(string data)
         {

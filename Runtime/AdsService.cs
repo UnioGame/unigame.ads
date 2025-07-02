@@ -41,7 +41,7 @@
             foreach (var placement in _adsData.placements)
             {
                 _placementsById[placement.id] = placement;
-                _placementsByType[placement.type].Add(placement);
+                _placementsByType[placement.placementType].Add(placement);
             }
         }
 

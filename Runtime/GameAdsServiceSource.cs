@@ -1,6 +1,5 @@
 ﻿namespace UniGame.Ads.Runtime
 {
-    using System.Linq;
     using Context.Runtime;
     using Core.Runtime;
     using Cysharp.Threading.Tasks;

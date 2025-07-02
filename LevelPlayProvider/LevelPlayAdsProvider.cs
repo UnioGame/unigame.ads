@@ -1,4 +1,4 @@
-﻿namespace Game.Runtime.Game.Liveplay.Ads.Runtime
+﻿namespace UniGame.Ads.Runtime
 {
     using System;
     using Cysharp.Threading.Tasks;
@@ -9,10 +9,13 @@
     public class LevelPlayAdsProvider : AdsProvider
     {
         public LevelPlayAdsConfig levelPlayAdsConfig = new();
-        
-        public override UniTask<IAdsService> Create(IContext context)
+
+        public override UniTask<IAdsService> Create(IContext context, AdsConfiguration configuration)
         {
-            var adsService = new LevelPlayAdsService(levelPlayAdsConfig);
+            var placements = configuration
+                .GetPlatformPlacements(adsPlatformName);
+            var adsService = new LevelPlayAdsService(adsPlatformName,
+                levelPlayAdsConfig,configuration,placements);
             return UniTask.FromResult<IAdsService>(adsService);
         }
     }
