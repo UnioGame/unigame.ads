@@ -1,27 +1,57 @@
-﻿namespace Game.Runtime.Game.Liveplay.Ads.Runtime
+﻿namespace UniGame.Ads.Runtime
 {
-    using System;
     using System.Linq;
+    using Context.Runtime;
+    using Core.Runtime;
     using Cysharp.Threading.Tasks;
-    using UniGame.Core.Runtime;
-    using UniGame.GameFlow.Runtime.Services;
+    using GameLib.AdsCore.Config;
     using UnityEngine;
 
-    [CreateAssetMenu(menuName = "Game/Services/Ads/Ads Source", fileName = "Ads Source")]
-    public class GameAdsServiceSource   : DataSourceAsset<IAdsService>
+    [CreateAssetMenu(menuName = "UniGame/Ads/Ads Service Source", fileName = "Ads Service Source")]
+    public class GameAdsServiceSource : DataSourceAsset<IAdsService>
     {
-        public AdsConfiguration adsConfiguration = new AdsConfiguration();
-        
+        public AdsConfigurationAsset adsConfiguration;
+
         protected override async UniTask<IAdsService> CreateInternalAsync(IContext context)
         {
-            var serviceSource = adsConfiguration.providers
-                .FirstOrDefault(x =>
-                    adsConfiguration.adsProvider.Equals(x.providerName, StringComparison.OrdinalIgnoreCase));
+            var configAsset = Instantiate(adsConfiguration);
+            var config = configAsset.configuration;
+            var awaitForInit = config.waitForInitialization;
             
-            if(serviceSource == null)
-                throw new Exception($"Ads provider not found: {adsConfiguration.adsProvider}");
+            context.Publish(config);
+            context.Publish(config.adsData);
             
-            return await serviceSource.Create(context);
+            var providers = config.providers;
+            var service = new AdsService(config);
+            service.AddTo(context.LifeTime);
+
+            
+            if (!awaitForInit)
+            {
+                foreach (var adsProvider in providers)
+                {
+                    RegisterProviderAsync(adsProvider,service,config, context).Forget();
+                }
+            }
+            else
+            {
+                var awaitTasks = providers
+                    .Select(x => RegisterProviderAsync(x,service,config,context));
+
+                await UniTask.WhenAll(awaitTasks);
+            }
+            
+            return service;
+        }
+
+        private async UniTask RegisterProviderAsync(AdsProvider provider,
+            AdsService service,
+            AdsConfiguration configuration,
+            IContext context)
+        {
+            if (provider.enabled == false) return;
+            var adsProvider = await provider.Create(context,configuration);
+            service.RegisterAdsProvider(provider.adsPlatformName,adsProvider);
         }
     }
 }

@@ -13,20 +13,20 @@ namespace UniGame.Ads.Runtime
     [Serializable]
     [ValueDropdown("@UniGame.Ads.Runtime.AdsPlatformId.GetPlacementIds()", IsUniqueList = true, 
         DropdownTitle = "PlacementId")]
-    public struct AdsPlatformId
+    public struct AdsPlatformId : IEquatable<string>
     {
         [SerializeField]
         public string value;
 
         #region static editor data
 
-        private static AdsDataConfigurationAsset _dataAsset;
+        private static AdsConfigurationAsset _dataAsset;
 
         public static IEnumerable<ValueDropdownItem<AdsPlatformId>> GetPlacementIds()
         {
 #if UNITY_EDITOR
-             _dataAsset ??= AssetEditorTools.GetAsset<AdsDataConfigurationAsset>();
-            var config = _dataAsset.configuration;
+             _dataAsset ??= AssetEditorTools.GetAsset<AdsConfigurationAsset>();
+            var config = _dataAsset.configuration.providers;
             if (config == null)
             {
                 yield return new ValueDropdownItem<AdsPlatformId>()
@@ -37,12 +37,12 @@ namespace UniGame.Ads.Runtime
                 yield break;
             }
 
-            foreach (var platform in config.platforms)
+            foreach (var provider in config)
             {
                 yield return new ValueDropdownItem<AdsPlatformId>()
                 {
-                    Text = platform,
-                    Value = (AdsPlatformId)platform,
+                    Text = provider.adsPlatformName,
+                    Value = (AdsPlatformId)provider.adsPlatformName,
                 };
             }
 #endif
@@ -88,6 +88,12 @@ namespace UniGame.Ads.Runtime
             value = data;
 
             return this;
+        }
+
+        public bool Equals(string other)
+        {
+            if (string.IsNullOrEmpty(value)) return value == other;
+            return value.Equals(other, StringComparison.OrdinalIgnoreCase);
         }
 
         public override bool Equals(object obj)

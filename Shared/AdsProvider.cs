@@ -8,7 +8,11 @@
     [Serializable]
     public abstract class AdsProvider
     {
-        public string providerName;
-        public abstract UniTask<IAdsService> Create(IContext context);
+        public bool enabled = true;
+        
+        public string adsPlatformName;
+        
+        public abstract UniTask<IAdsService> Create(IContext context,
+            AdsConfiguration configuration);
     }
 }

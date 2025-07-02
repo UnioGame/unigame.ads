@@ -24,9 +24,14 @@ namespace UniGame.Ads.Runtime
             lifeTime.Release();
         }
 
-        public async UniTask<bool> IsPlacementAvailable(string placementName)
+        public UniTask<bool> IsPlacementAvailable(string placementName)
         {
-            return true;
+            return UniTask.FromResult(true);
+        }
+
+        public UniTask<bool> IsPlacementAvailable(PlacementType placementName)
+        {
+            return UniTask.FromResult(true);
         }
 
         public async UniTask LoadAdsAsync()

@@ -12,35 +12,35 @@ namespace UniGame.Ads.Runtime
 
     [Serializable]
     [ValueDropdown("@UniGame.Ads.Runtime.AdsPlacementId.GetPlacementIds()", IsUniqueList = true, DropdownTitle = "PlacementId")]
-    public struct AdsPlacementId
+    public struct AdsPlacementId : IEquatable<string>
     {
         [SerializeField]
-        public int value;
+        public string value;
 
         #region static editor data
 
-        private static AdsDataConfigurationAsset _dataAsset;
+        private static AdsConfigurationAsset _dataAsset;
 
         public static IEnumerable<ValueDropdownItem<AdsPlacementId>> GetPlacementIds()
         {
 #if UNITY_EDITOR
-             _dataAsset ??= AssetEditorTools.GetAsset<AdsDataConfigurationAsset>();
-            var config = _dataAsset.configuration;
+             _dataAsset ??= AssetEditorTools.GetAsset<AdsConfigurationAsset>();
+            var config = _dataAsset.configuration.adsData;
             if (config == null)
             {
                 yield return new ValueDropdownItem<AdsPlacementId>()
                 {
                     Text = "EMPTY",
-                    Value = (AdsPlacementId)0,
+                    Value = (AdsPlacementId)string.Empty,
                 };
                 yield break;
             }
 
-            foreach (var type in config.placementData.placements)
+            foreach (var type in config.placements)
             {
                 yield return new ValueDropdownItem<AdsPlacementId>()
                 {
-                    Text = type.name,
+                    Text = type.id,
                     Value = (AdsPlacementId)type.id,
                 };
             }
@@ -68,25 +68,31 @@ namespace UniGame.Ads.Runtime
 
         #endregion
 
-        public static implicit operator int(AdsPlacementId v)
+        public static implicit operator string(AdsPlacementId v)
         {
             return v.value;
         }
 
-        public static explicit operator AdsPlacementId(int v)
+        public static explicit operator AdsPlacementId(string v)
         {
             return new AdsPlacementId { value = v };
         }
 
         public override string ToString() => value.ToString();
 
-        public override int GetHashCode() => value;
+        public override int GetHashCode() => value.GetHashCode();
 
-        public AdsPlacementId FromInt(int data)
+        public AdsPlacementId FromString(string data)
         {
             value = data;
 
             return this;
+        }
+
+        public bool Equals(string other)
+        {
+            if (string.IsNullOrEmpty(value)) return value == other;
+            return value.Equals(other, StringComparison.OrdinalIgnoreCase);
         }
 
         public override bool Equals(object obj)

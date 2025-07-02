@@ -29,3 +29,10 @@ https://github.com/yandexmobile/yandex-ads-unity-plugin
 Go to + -> Install package from git URL... and paste 
 
 https://github.com/yandexmobile/yandex-ads-unity-plugin.git?path=/mobileads-sdk (replace mobileads-sdk with the name of the desired package)
+
+
+# Google Ad Mob
+
+https://github.com/googleads/googleads-mobile-unity
+
+To enable Google AdMob support add scriptable define "ADMOB_ENABLED" to you project.

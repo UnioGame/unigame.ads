@@ -4,9 +4,9 @@ using UnityEngine;
 
 namespace UniGame.Ads.Runtime
 {
-    using System.Linq;
     using Core.Runtime;
     using Cysharp.Threading.Tasks;
+    using Game.Modules.unigame.ads.Shared;
     using R3;
     using UniCore.Runtime.ProfilerTools;
     using UniGame.Runtime.DataFlow;
@@ -16,12 +16,12 @@ namespace UniGame.Ads.Runtime
     [Serializable]
     public class YandexAdsService : IAdsService
     {
-        private PlacementData _placementData;
         
-        private ReactiveCommand<AdsShowResult> _applyRewardedCommand = new();
         private LifeTime _lifeTime;
         private List<AdsShowResult> _rewardedHistory = new();
         private Dictionary<string, AdsShowResult> _awaitedRewards = new();
+
+        private Dictionary<string, PlatformAdsPlacement> _placements;
         private float _reloadAdsInterval;
         private float _lastAdsReloadTime;
         private bool _loadingAds;
@@ -29,9 +29,11 @@ namespace UniGame.Ads.Runtime
         private string _activePlacement = string.Empty;
 
         private Subject<AdsActionData> _adsAction = new();
+        private ReactiveCommand<AdsShowResult> _applyRewardedCommand = new();
+        
         private RewardedAdLoader _rewardedAdLoader;
         private RewardedAd _rewardedAd;
-        private readonly AdsPlatformId _platformId;
+        private string _platformId;
         private AdsDataConfiguration _adsConfig;
 
         public ILifeTime LifeTime => _lifeTime;
@@ -42,13 +44,21 @@ namespace UniGame.Ads.Runtime
 
         public Observable<AdsActionData> AdsAction => _adsAction;
         
-        public YandexAdsService(AdsPlatformId platformId,AdsDataConfiguration configuration)
+        /// <summary>
+        /// placements - dictionary of platform placements
+        /// </summary>
+        /// <param name="platformId"></param>
+        /// <param name="configuration"></param>
+        /// <param name="placements"></param>
+        public YandexAdsService(string platformId,
+            AdsDataConfiguration configuration, 
+            Dictionary<string,PlatformAdsPlacement> placements)
         {
             _lifeTime = new ();
             _platformId = platformId;
             _adsConfig = configuration;
+            _placements = placements;
 
-            _placementData = configuration.placementData;
             _reloadAdsInterval = configuration.reloadAdsInterval;
             _lastAdsReloadTime = -_reloadAdsInterval;
 
@@ -95,19 +105,33 @@ namespace UniGame.Ads.Runtime
 
             _awaitedRewards[placeId] = result;
         }
-        
+
+        public UniTask<bool> IsPlacementAvailable(PlacementType placementType)
+        {
+            switch (placementType)
+            {
+                case PlacementType.Rewarded:
+                    return UniTask.FromResult(RewardedAvailable);
+                case PlacementType.Interstitial:
+                    return UniTask.FromResult(InterstitialAvailable);
+                case PlacementType.Banner:
+                    return UniTask.FromResult(false);
+                default:
+                    return UniTask.FromResult(false);
+            }
+
+            return UniTask.FromResult(false);
+        }
+
         public async UniTask<bool> IsPlacementAvailable(string placementName)
         {
-            var adsPlacementItem = _placementData.GetPlatformPlacementByName(placementName);
-            if (adsPlacementItem.Equals(default(AdsPlacementItem)))
+            if (!_placements.TryGetValue(placementName, out var placement))
             {
-                GameLog.Log($"Yandex Ads Service: have't ads placement item with name {placementName}", Color.red);
-                return false;   
+                GameLog.Log($"Yandex Ads Service: haven't ads placement item with name {placementName}", Color.red);
+                return false;
             }
-            
-            GameLog.Log($"Yandex Ads Service: have ads placement item with name {adsPlacementItem.name}", Color.green);
 
-            var placementId = adsPlacementItem.GetPlacementIdByPlatform(_platformId);
+            var placementId = placement.platformPlacement;
             
             if (string.IsNullOrEmpty(placementId))
             {
@@ -117,7 +141,7 @@ namespace UniGame.Ads.Runtime
             
             GameLog.Log($"Yandex Ads Service: have override placement is {placementId}", Color.green);
             
-            var placementType = adsPlacementItem.type;
+            var placementType = placement.placementType;
             switch (placementType)
             {
                 case PlacementType.Rewarded:
@@ -149,8 +173,9 @@ namespace UniGame.Ads.Runtime
             _lastAdsReloadTime = Time.realtimeSinceStartup;
 
             var rewarded = GetRewardedPlacement();
+            
             var adRequestConfiguration = new AdRequestConfiguration
-                .Builder(rewarded.GetPlacementIdByPlatform(_platformId))
+                .Builder(rewarded.platformPlacement)
                 .Build();
             
             _rewardedAdLoader.LoadAd(adRequestConfiguration);
@@ -158,18 +183,23 @@ namespace UniGame.Ads.Runtime
             _loadingAds = false;
         }
 
-        public AdsPlacementItem GetRewardedPlacement()
-        {
-            return _adsConfig.placementData
-                .placements
-                .FirstOrDefault(x => x.type == PlacementType.Rewarded);
-        }
 
         public async UniTask<AdsShowResult> Show(string placement, PlacementType type)
         {
-            placement = _placementData
-                .GetPlatformPlacementByName(placement)
-                .GetPlacementIdByPlatform(_platformId);
+            if (!_placements.TryGetValue(placement, out var adsPlacement))
+            {
+                var message = $"Yandex Ads Service: haven't ads placement item with name {placement}";
+                Debug.LogError(message);
+                
+                return new AdsShowResult()
+                {
+                    PlacementName = placement,
+                    Rewarded = false,
+                    Error = true,
+                    Message = message,
+                    PlacementType = type,
+                };
+            }
             
             _activePlacement = placement;
             
@@ -420,7 +450,9 @@ namespace UniGame.Ads.Runtime
             });
             LoadAdsAsync().Forget();
         }
+        
         #endregion
+        
         public void DestroyRewardedAd()
         {
             if (_rewardedAd != null)
@@ -429,5 +461,22 @@ namespace UniGame.Ads.Runtime
                 _rewardedAd = null;
             }
         }
+
+        #region private methods
+
+        
+        private PlatformAdsPlacement GetRewardedPlacement()
+        {
+            foreach (var platformAdsPlacement in _placements.Values)
+            {
+                if(platformAdsPlacement.placementType != PlacementType.Rewarded)
+                    continue;
+                return platformAdsPlacement;
+            }
+
+            return default;
+        }
+
+        #endregion
     }
 }

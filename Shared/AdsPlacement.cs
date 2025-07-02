@@ -3,14 +3,17 @@ using System.Collections.Generic;
 
 namespace UniGame.Ads.Runtime
 {
+    using Sirenix.OdinInspector;
+
     [Serializable]
-    public class AdsPlacementItem
+    public class AdsPlacement
     {
-        public int id;
-        public string name = string.Empty;
+        public string id;
         public string description;
+        public PlacementType placementType;
         
-        public List<AdsPlatformPlacement> placements =new();
+        [ListDrawerSettings(ListElementLabelName = "@placement")]
+        public List<PlatformPlacementData> placements =new();
         
         public PlacementType type;
         
@@ -19,7 +22,7 @@ namespace UniGame.Ads.Runtime
             foreach (var item in placements)
             {
                 if (item.platform == platform)
-                    return item.placementId;
+                    return item.placement;
             }
 
             return default;
@@ -27,9 +30,9 @@ namespace UniGame.Ads.Runtime
     }
 
     [Serializable]
-    public class AdsPlatformPlacement
+    public class PlatformPlacementData
     {
-        public string placementId;
+        public string placement;
         public AdsPlatformId platform;
     }
 }
