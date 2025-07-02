@@ -1,19 +1,29 @@
 using Cysharp.Threading.Tasks;
-using UniGame.Ads.Runtime;
 using UnityEngine;
 
 namespace UniGame.Ads.Runtime
 {
+    using System;
+    using System.Linq;
     using R3;
     using UniGame.Core.Runtime;
     using UniGame.Runtime.DataFlow;
 
+    [Serializable]
     public class DebugAdsService : IAdsService
     {
+        private readonly DebugAdsConfiguration _debugAdsConfiguration;
         public LifeTime lifeTime = new();
-        public bool RewardedAvailable => true;
 
-        public bool InterstitialAvailable => true;
+        public DebugAdsService(DebugAdsConfiguration debugAdsConfiguration)
+        {
+            _debugAdsConfiguration = debugAdsConfiguration;
+        }
+        
+        public bool RewardedAvailable => _debugAdsConfiguration.rewardedAvailable;
+
+        public bool InterstitialAvailable => _debugAdsConfiguration.interstitialAvailable;
+        
         private Subject<AdsActionData> _adsAction = new();
         public Observable<AdsActionData> AdsAction => _adsAction;
         
@@ -26,6 +36,13 @@ namespace UniGame.Ads.Runtime
 
         public UniTask<bool> IsPlacementAvailable(string placementName)
         {
+            var unavailablePlacement = _debugAdsConfiguration
+                .unavailablePlacements
+                .FirstOrDefault(x => x.Equals(placementName, StringComparison.InvariantCultureIgnoreCase));
+
+            if (unavailablePlacement != null) 
+                return UniTask.FromResult(false);
+            
             return UniTask.FromResult(true);
         }
 
@@ -94,18 +111,32 @@ namespace UniGame.Ads.Runtime
 
         public async UniTask<AdsShowResult> ShowRewardedAdAsync(string placeId)
         {
-            AdsShowResult result = new AdsShowResult()
+            var result = new AdsShowResult()
             {
                 Message = "Complete debug!",
                 PlacementName = placeId,
                 PlacementType = PlacementType.Rewarded,
                 Rewarded = true
             };
+            
+            if (!RewardedAvailable)
+            {
+                result = new AdsShowResult()
+                {
+                    Message = "Debug Ads Failed!",
+                    PlacementName = placeId,
+                    PlacementType = PlacementType.Rewarded,
+                    Rewarded = false,
+                    Error = true,
+                    RewardAmount = 0,
+                };
+            }
+            
             _adsAction.OnNext(new AdsActionData()
             {
                 PlacementName = placeId,
                 Message = "Reward open",
-                ActionType = PlacementActionType.Opened,
+                ActionType = RewardedAvailable ?  PlacementActionType.Opened : PlacementActionType.Failed,
                 PlacementType = PlacementType.Rewarded
             });
             
@@ -113,7 +144,7 @@ namespace UniGame.Ads.Runtime
             {
                 PlacementName = placeId,
                 Message = "Reward granted",
-                ActionType = PlacementActionType.Rewarded,
+                ActionType = RewardedAvailable ?  PlacementActionType.Rewarded : PlacementActionType.Failed,
                 PlacementType = PlacementType.Rewarded
             });
             
