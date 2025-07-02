@@ -1,4 +1,4 @@
-﻿namespace Game.Runtime.Game.Liveplay.Ads.Runtime
+﻿namespace UniGame.Ads.Runtime
 {
     using System;
     using Cysharp.Threading.Tasks;
@@ -9,13 +9,13 @@
     [Serializable]
     public class AdMobAdsProvider : AdsProvider
     {
-        [InlineProperty]
-        public AdmobAdsConfig adsMobConfig = new();
-        
-        public override UniTask<IAdsService> Create(IContext context)
+        public override async UniTask<IAdsService> Create(IContext context, AdsConfiguration configuration)
         {
-            var service = new AdmobAdsService(adsMobConfig);
-            return UniTask.FromResult<IAdsService>(service);
+            var platformPlacements = configuration
+                .GetPlatformPlacements(adsPlatformName);
+            var service = new AdmobAdsService(adsPlatformName,configuration.adsData,platformPlacements);
+            await service.InitializeAsync();
+            return service;
         }
     }
 }

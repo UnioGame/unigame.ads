@@ -1,11 +1,13 @@
-namespace Game.Runtime.Game.Liveplay.Ads.Runtime
+namespace UniGame.Ads.Runtime
 {
     using UnityEngine;
     using System;
     using System.Collections.Generic;
     using Cysharp.Threading.Tasks;
+    using Game.Modules.unigame.ads.Shared;
     using GoogleMobileAds.Api;
     using R3;
+    using UniCore.Runtime.ProfilerTools;
     using UniGame.Core.Runtime;
     using UniGame.Runtime.DataFlow;
     using UniGame.Runtime.Rx;
@@ -16,9 +18,8 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
         public const string AdmobSdk = "admob";
         
         private LifeTime _lifeTime;
-        private AdmobAdsConfig _adsConfig;
+        private string _platformName;
         private ReactiveValue<bool> _isInitialized = new();
-        private PlacementIdDataAsset _placementIds;
         
         private string _activePlacement = string.Empty;
         private bool _isInProgress;
@@ -30,33 +31,25 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
         private Dictionary<string,AdsShowResult> _awaitedRewards = new();
         private ReactiveCommand<AdsShowResult> _applyRewardedCommand = new();
         private Subject<AdsActionData> _adsAction = new();
-        private Dictionary<string, AdsPlacementItem> _placements = new();
-        private Dictionary<PlacementAdsId, AdsPlacementItem> _idPlacements = new();
+        private Dictionary<string,PlatformAdsPlacement> _placements = new();
 
         private InterstitialAd _interstitialAdCache = null;
         
         private Dictionary<string, AdmobRewardedAdsCache> _rewardedAdsCache = new();
-        public AdmobAdsService(AdmobAdsConfig config)
+        public AdmobAdsService(
+            string platformName,
+            AdsDataConfiguration config,
+            Dictionary<string,PlatformAdsPlacement> placements)
         {
-            Debug.Log($"[ADS SERVICE]: admob created");
-            
-            _adsConfig = config;
-            _lifeTime = new LifeTime();
-            _reloadAdsInterval = config.ReloadAdsInterval;
-            _lastAdsReloadTime = -_reloadAdsInterval;
-            _placementIds = config.placementIds;
+            GameLog.Log($"[ADS SERVICE]: admob created");
 
-            foreach (var adsPlacementId in _placementIds.Placements)
-            {
-                _placements[adsPlacementId.Name] = adsPlacementId;
-                _idPlacements[(PlacementAdsId)adsPlacementId.Id] = adsPlacementId;
-            }
-            
-            if(_adsConfig.EnableAds == false) return;
-            
+            _platformName = platformName;
+            _lifeTime = new LifeTime();
+            _reloadAdsInterval = config.reloadAdsInterval;
+            _lastAdsReloadTime = -_reloadAdsInterval;
+            _placements = placements;
+ 
             SubscribeToEvents();
-            
-            InitializeAsync().Forget();
         }
 
         public ILifeTime LifeTime => _lifeTime;
@@ -66,6 +59,36 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
         public Observable<AdsActionData> AdsAction => _adsAction;
         public bool IsInProgress => _isInProgress;
         
+        public async UniTask InitializeAsync()
+        {
+            Debug.Log($"[ADS SERVICE]: admob initialization started");
+            
+            MobileAds.Initialize(SdkInitializationCompletedEvent);
+            
+            var isInitialized = await _isInitialized
+                .Where(x => x)
+                .FirstAsync(_lifeTime.Token);
+
+            Debug.Log($"[ADS SERVICE]: admob initialized {isInitialized}");
+
+            foreach (var placementData in _placements.Values)
+            {
+                if (placementData.placementType != PlacementType.Rewarded) continue;
+                
+                _rewardedAdsCache.Add(placementData.platformPlacement,
+                    new AdmobRewardedAdsCache(placementData.platformPlacement));
+                LoadRewardedAd(placementData.platformPlacement).Forget();
+            }
+            
+            _applyRewardedCommand
+                .Subscribe(ApplyRewardedCommand)
+                .AddTo(_lifeTime);
+            
+            LoadAdsAsync()
+                .AttachExternalCancellation(_lifeTime.Token)
+                .Forget();
+        }
+        
         public void LoadAdsAction(AdsActionData actionData)
         {
             Debug.Log($"[ADS SERVICE]:admob action: NAME:{actionData.PlacementName} ERROR:{actionData.ErrorCode} MESSAGE:{actionData.Message}");
@@ -74,7 +97,10 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
         
         public async UniTask<bool> LoadRewardedAd(string placementId)
         {
-            Debug.Log($"Loading the rewarded ad {placementId}. " +
+            if (!_placements.TryGetValue(placementId, out var placementData))
+                return false;
+            
+            GameLog.Log($"Loading the rewarded ad {placementId}. " +
                       $"Load:{_rewardedAdsCache[placementId].LoadProcess}. " +
                       $"Cache:{_rewardedAdsCache[placementId].RewardedAd}");
             
@@ -84,8 +110,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
             if (_rewardedAdsCache[placementId].LoadProcess == true)
             {
                 await UniTask
-                    .WaitWhile(() => _rewardedAdsCache[placementId].LoadProcess == true)
-                    .AttachExternalCancellation(_lifeTime.Token);
+                    .WaitWhile(_rewardedAdsCache, x => x[placementId].LoadProcess == true,cancellationToken:_lifeTime);
             }
             
             var adsRewardedAd = _rewardedAdsCache[placementId].RewardedAd;
@@ -93,7 +118,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
             if (adsRewardedAd != null) return true;
 
             var adRequest = new AdRequest();
-            var cppId = _placements[placementId].GetPlacementIdByPlatform(_adsConfig.PlacementPlatfrom);
+            var cppId = _placements[placementId].platformPlacement;
             var loadComplete = false;
             var loaded = false;
             
@@ -179,10 +204,12 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
             return loaded;
         }
         
-        public async UniTask<AdsShowResult> Show(PlacementAdsId placementAdsId)
+        public async UniTask<AdsShowResult> Show(string placementId)
         {
-            if (!_idPlacements.TryGetValue(placementAdsId, out var placementItem))
+            if (!_placements.TryGetValue(placementId, out var placementItem))
             {
+                GameLog.LogError($"[ADS SERVICE]: Placement not found: {placementId}");
+                
                 return new AdsShowResult
                 {
                     Error = true,
@@ -193,7 +220,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                 };
             }
             
-            var showResult = await Show(placementItem.Name, PlacementType.Rewarded);
+            var showResult = await Show(placementItem.platformPlacement, PlacementType.Rewarded);
             return showResult;
         }
         
@@ -283,19 +310,19 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
         
         public async UniTask<AdsShowResult> Show(PlacementType type)
         {
-            AdsPlacementItem adsPlacementId = default;
+            PlatformAdsPlacement adsPlacement = null;
             foreach (var placement in _placements)
             {
                 var placementValue = placement.Value;
-                if(placementValue.Type != type)
+                if(placementValue.placementType != type)
                     continue;
-                if(await IsPlacementAvailable(placementValue.Name) == false)
-                    continue;
-                adsPlacementId = placementValue;
+                var isAvailable = await IsPlacementAvailable(placementValue.platformPlacement);
+                if(!isAvailable) continue;
+                adsPlacement = placementValue;
                 break;
             }
 
-            if (string.IsNullOrEmpty(adsPlacementId.Name))
+            if (adsPlacement == null)
             {
                 return new AdsShowResult
                 {
@@ -307,7 +334,7 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                 };
             }
             
-            var showResult = await Show(adsPlacementId.Name, PlacementType.Rewarded);
+            var showResult = await Show(adsPlacement.platformPlacement, PlacementType.Rewarded);
             return showResult;
         }
         
@@ -330,13 +357,13 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
         
         public async UniTask<bool> IsPlacementAvailable(string placementName)
         {
-            if(_placements.TryGetValue(placementName,out var adsPlacementId) == false)
+            if(_placements.TryGetValue(placementName,out var adsPlacement) == false)
             {
                 Debug.Log($"[ADS SERVICE]:Placement haven't {placementName}");
                 return false;
             }
             
-            var placementType = adsPlacementId.Type;
+            var placementType = adsPlacement.placementType;
             
             switch (placementType)
             {
@@ -348,6 +375,21 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
             
             return false;
         }
+
+        public async UniTask<bool> IsPlacementAvailable(PlacementType placementName)
+        {
+            foreach (var platformAdsPlacement in _placements)
+            {
+                var value = platformAdsPlacement.Value;
+                if(value.placementType != placementName)
+                    continue;
+                var isAvailable = await IsPlacementAvailable(value.platformPlacement);
+                if(isAvailable) return true;
+            }
+
+            return false;
+        }
+
         public virtual async UniTask LoadAdsAsync()
         {
             Debug.Log("[ADS SERVICE]:Do not implement preload into admob");
@@ -361,36 +403,6 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
                 UnsubscribeToRewardedAdEvents(_rewardedAdsCache[key].RewardedAd);
             
             UnsubscribeToInterstitialAdEvents(_interstitialAdCache);
-        }
-        
-        private async UniTask InitializeAsync()
-        {
-            Debug.Log($"[ADS SERVICE]: admob initialization started");
-            
-            MobileAds.Initialize(SdkInitializationCompletedEvent);
-            
-            var isInitialized = await _isInitialized
-                .Where(x => x)
-                .FirstAsync(_lifeTime.Token);
-
-            Debug.Log($"[ADS SERVICE]: admob initialized {isInitialized}");
-
-            foreach (var adsPlacementId in _placementIds.Placements)
-            {
-                if (adsPlacementId.Type == PlacementType.Rewarded)
-                {
-                    _rewardedAdsCache.Add(adsPlacementId.Name, new AdmobRewardedAdsCache(adsPlacementId.Name));
-                    LoadRewardedAd(adsPlacementId.Name).Forget();
-                }
-            }
-            
-            _applyRewardedCommand
-                .Subscribe(ApplyRewardedCommand)
-                .AddTo(_lifeTime);
-            
-            LoadAdsAsync()
-                .AttachExternalCancellation(_lifeTime.Token)
-                .Forget();
         }
         
         private AdsShowResult AddPlacementResult(string placeId, 
