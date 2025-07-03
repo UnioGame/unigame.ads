@@ -2,13 +2,13 @@
 {
     using System;
     using System.Collections.Generic;
+    using System.Linq;
     using Cysharp.Threading.Tasks;
     using GameFlow.Runtime;
     using R3;
     using UniGame.Runtime.ObjectPool.Extensions;
     using UniGame.Runtime.Utils;
     using UnityEngine.Pool;
-    using ZLinq;
 
     [Serializable]
     public class AdsService : GameService, IAdsService
@@ -50,7 +50,6 @@
             get
             {
                 return _adsServices
-                    .AsValueEnumerable()
                     .Any(x => x.Value.RewardedAvailable);
             }
         }
@@ -60,7 +59,6 @@
             get
             {
                 return _adsServices
-                    .AsValueEnumerable()
                     .Any(x => x.Value.InterstitialAvailable);
             }
         }

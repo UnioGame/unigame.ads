@@ -62,7 +62,10 @@ https://github.com/yandexmobile/yandex-ads-unity-plugin
 
 Go to + -> Install package from git URL... and paste 
 
-https://github.com/yandexmobile/yandex-ads-unity-plugin.git?path=/mobileads-sdk (replace mobileads-sdk with the name of the desired package)
+```
+"com.yandex.mobileads": "https://github.com/yandexmobile/yandex-ads-unity-plugin.git?path=/mobileads-sdk",
+```
+
 
 
 # Google Ad Mob

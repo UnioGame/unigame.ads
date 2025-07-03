@@ -17,7 +17,15 @@
     "overrideReferences": false,
     "precompiledReferences": [],
     "autoReferenced": true,
-    "defineConstraints": [],
-    "versionDefines": [],
+    "defineConstraints": [
+        "YANDEX_ADS_ENABLED"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.yandex.mobileads",
+            "expression": "",
+            "define": "YANDEX_ADS_ENABLED"
+        }
+    ],
     "noEngineReferences": false
 }
