@@ -15,6 +15,7 @@ Add the package to your Unity project using the Package Manager:
 {
   "dependencies": {
     "com.unity.addressables": "2.6.0",
+    "com.unigame.contextdata" : "https://github.com/UnioGame/unigame.context.git",
     "com.unigame.addressablestools" : "https://github.com/UnioGame/unigame.addressables",
     "com.unigame.unicore": "https://github.com/UnioGame/unigame.core.git",
     "com.unigame.rx": "https://github.com/UnioGame/unigame.rx.git",
