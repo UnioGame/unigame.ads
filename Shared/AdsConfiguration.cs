@@ -53,12 +53,9 @@
                     };
 
                     placements[placement.id] = platformPlacement;
-                    placements[platformData.placement] = platformPlacement;
                 }
-
             }
             return placements;
         }
     }
-    
 }

@@ -74,8 +74,7 @@ namespace UniGame.Ads.Runtime
             foreach (var placementData in _placements.Values)
             {
                 if (placementData.placementType != PlacementType.Rewarded) continue;
-                
-                _rewardedAdsCache.Add(placementData.platformPlacement,
+                _rewardedAdsCache.Add(placementData.id,
                     new AdmobRewardedAdsCache(placementData.platformPlacement));
                 LoadRewardedAd(placementData.platformPlacement).Forget();
             }
