@@ -314,7 +314,7 @@ namespace UniGame.Ads.Runtime
         }
         public void Dispose()
         {
-            _lifeTime.Release();
+            _lifeTime.Terminate();
 
             if (_rewardedAd == null)
                 return;

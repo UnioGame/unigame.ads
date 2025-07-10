@@ -2,7 +2,7 @@
     "name": "com.unigame.ads",
     "displayName": "UniGame Ads Module",
     "author": { "name": "UniGame" },
-    "version": "2025.0.13",
+    "version": "2025.0.14",
     "unity": "2023.1",
     "description": "ads module for Unity.",
     "keywords": [ 

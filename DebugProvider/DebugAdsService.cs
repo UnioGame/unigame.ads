@@ -31,7 +31,7 @@ namespace UniGame.Ads.Runtime
 
         public void Dispose()
         {
-            lifeTime.Release();
+            lifeTime.Terminate();
         }
 
         public UniTask<bool> IsPlacementAvailable(string placementName)
