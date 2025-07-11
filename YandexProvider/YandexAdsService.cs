@@ -257,7 +257,7 @@ namespace VN.Runtime.Ads
         }
         public void Dispose()
         {
-            _lifeTime.Release();
+            _lifeTime.Terminate();
 
             if (_rewardedAd == null)
                 return;

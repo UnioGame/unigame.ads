@@ -21,7 +21,7 @@ namespace VN.Runtime.Ads
 
         public void Dispose()
         {
-            lifeTime.Release();
+            lifeTime.Terminate();
         }
 
         public async UniTask<bool> IsPlacementAvailable(string placementName)
