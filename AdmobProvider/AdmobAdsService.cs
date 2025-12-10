@@ -15,18 +15,27 @@ namespace UniGame.Ads.Runtime
     [Serializable]
     public class AdmobAdsService : IAdsService
     {
+#if UNITY_EDITOR || GAME_DEBUG
+#if UNITY_ANDROID
+        private const string TestAndroidInterstitialPlacementId = "ca-app-pub-3940256099942544/1033173712";
+        private const string TestAndroidRewardedPlacementId =     "ca-app-pub-3940256099942544/5224354917";
+#elif UNITY_IPHONE
+        private const string TestIphoneInterstitialPlacementId =  "ca-app-pub-3940256099942544/4411468910";
+        private const string TestIphoneRewardedPlacementId =      "ca-app-pub-3940256099942544/5224354917";
+#endif
+#endif
         public const string AdmobSdk = "admob";
-        
+
         private LifeTime _lifeTime;
         private string _platformName;
         private ReactiveValue<bool> _isInitialized = new();
-        
+
         private string _activePlacement = string.Empty;
         private bool _isInProgress;
         private float _reloadAdsInterval;
         private float _lastAdsReloadTime;
         private bool _loadingAds;
-        
+
         private List<AdsShowResult> _rewardedHistory = new();
         private Dictionary<string,AdsShowResult> _awaitedRewards = new();
         private ReactiveCommand<AdsShowResult> _applyRewardedCommand = new();
@@ -34,8 +43,9 @@ namespace UniGame.Ads.Runtime
         private Dictionary<string,PlatformAdsPlacement> _placements = new();
 
         private InterstitialAd _interstitialAdCache = null;
-        
+
         private Dictionary<string, AdmobRewardedAdsCache> _rewardedAdsCache = new();
+
         public AdmobAdsService(
             string platformName,
             AdsDataConfiguration config,
@@ -53,12 +63,12 @@ namespace UniGame.Ads.Runtime
         }
 
         public ILifeTime LifeTime => _lifeTime;
-                
+
         public virtual bool RewardedAvailable => true;
         public virtual bool InterstitialAvailable => true;
         public Observable<AdsActionData> AdsAction => _adsAction;
         public bool IsInProgress => _isInProgress;
-        
+
         public async UniTask InitializeAsync()
         {
             Debug.Log($"[ADS SERVICE]: admob initialization started");
@@ -71,12 +81,19 @@ namespace UniGame.Ads.Runtime
 
             Debug.Log($"[ADS SERVICE]: admob initialized {isInitialized}");
 
-            foreach (var placementData in _placements.Values)
+            foreach (PlatformAdsPlacement placementData in _placements.Values)
             {
-                if (placementData.placementType != PlacementType.Rewarded) continue;
-                _rewardedAdsCache.Add(placementData.id,
-                    new AdmobRewardedAdsCache(placementData.platformPlacement));
-                LoadRewardedAd(placementData.platformPlacement).Forget();
+                if (placementData.placementType != PlacementType.Rewarded) 
+                    continue;
+                
+                _rewardedAdsCache.Add(placementData.id, new AdmobRewardedAdsCache(placementData.platformPlacement));
+                LoadRewardedAd(placementData.id).Forget();
+            }
+
+            foreach (PlatformAdsPlacement placementData in _placements.Values)
+            {
+                if (placementData.placementType == PlacementType.Interstitial)
+                    LoadInterstitialAd(placementData.platformPlacement).Forget();
             }
             
             _applyRewardedCommand
@@ -87,13 +104,13 @@ namespace UniGame.Ads.Runtime
                 .AttachExternalCancellation(_lifeTime.Token)
                 .Forget();
         }
-        
+
         public void LoadAdsAction(AdsActionData actionData)
         {
             Debug.Log($"[ADS SERVICE]:admob action: NAME:{actionData.PlacementName} ERROR:{actionData.ErrorCode} MESSAGE:{actionData.Message}");
             return;
         }
-        
+
         public async UniTask<bool> LoadRewardedAd(string placementId)
         {
             if (!_placements.TryGetValue(placementId, out var placementData))
@@ -117,10 +134,9 @@ namespace UniGame.Ads.Runtime
             if (adsRewardedAd != null) return true;
 
             var adRequest = new AdRequest();
-            var cppId = _placements[placementId].platformPlacement;
             var loadComplete = false;
             var loaded = false;
-            
+            var cppId = GetPlatformPlacementID(placementId); 
             _rewardedAdsCache[placementId].LoadProcess = true;
 
             Debug.Log($"[ADS SERVICE]:Loading cppId: {cppId}");
@@ -128,14 +144,12 @@ namespace UniGame.Ads.Runtime
             {
                 if (error != null || ad == null)
                 {
-                    Debug.LogError("Rewarded ad failed to load an ad " +
-                                   "with error : " + error);
+                    Debug.LogError("Rewarded ad failed to load an ad " + "with error : " + error);
                     loadComplete = true;
                     return;
                 }
 
-                Debug.Log("[ADS SERVICE]:Rewarded ad loaded with response : "
-                          + ad.GetResponseInfo());
+                Debug.Log("[ADS SERVICE]:Rewarded ad loaded with response : " + ad.GetResponseInfo());
 
                 _rewardedAdsCache[placementId].RewardedAd = ad;
                 
@@ -161,9 +175,32 @@ namespace UniGame.Ads.Runtime
             Debug.Log($"[ADS SERVICE]:Rewarded ad loaded: {loaded}");
             return loaded;
         }
-        
+
+        private string GetPlatformPlacementID(string placementId)
+        {
+#if UNITY_EDITOR || GAME_DEBUG
+#if UNITY_ANDROID
+            string cppId = TestAndroidRewardedPlacementId;
+#elif UNITY_IPHONE
+            string cppId = TestIphoneRewardedPlacementId;
+#endif
+#else
+            var cppId = _placements[placementId].platformPlacement;
+#endif
+            return cppId;
+        }
+
         public async UniTask<bool> LoadInterstitialAd(string placementId)
         {
+#if UNITY_EDITOR || GAME_DEBUG
+    #if UNITY_ANDROID
+            placementId = TestAndroidInterstitialPlacementId;
+    #elif UNITY_IPHONE
+            placementId = _testIphoneInterstitialPlacementId;
+    #endif
+#endif
+            Debug.Log($"Placemend to load: {placementId}");
+            
             if (_interstitialAdCache != null)
             {
                 _interstitialAdCache.Destroy();
@@ -181,15 +218,13 @@ namespace UniGame.Ads.Runtime
                 {
                     if (error != null || ad == null)
                     {
-                        Debug.LogError("interstitial ad failed to load an ad " +
-                                       "with error : " + error);
+                        Debug.LogError("interstitial ad failed to load an ad " + "with error : " + error);
                         loadComplete = true;
 
                         return;
                     }
 
-                    Debug.Log("Interstitial ad loaded with response : "
-                              + ad.GetResponseInfo());
+                    Debug.Log("Interstitial ad loaded with response : " + ad.GetResponseInfo());
 
                     _interstitialAdCache = ad;
                     loadComplete = true;
@@ -197,12 +232,12 @@ namespace UniGame.Ads.Runtime
                 });
 
             await UniTask
-                .WaitWhile(() => loadComplete == true)
+                .WaitWhile(() => loadComplete == false)
                 .AttachExternalCancellation(_lifeTime.Token);
 
             return loaded;
         }
-        
+
         public async UniTask<AdsShowResult> Show(string placementId)
         {
             if (!_placements.TryGetValue(placementId, out var placementItem))
@@ -263,18 +298,16 @@ namespace UniGame.Ads.Runtime
                     PlacementType = type,
                 };
             }
-            else
-            {
-                ShowPlacement(placeId, type);
-            }
-            
-            await UniTask
-                .WaitWhile(() => _awaitedRewards.ContainsKey(placeId) == false)
-                .AttachExternalCancellation(_lifeTime.Token);
 
+            ShowPlacementAsync(placeId, type).Forget();
+
+            await UniTask
+                .WaitWhile(() => !_awaitedRewards.ContainsKey(placeId))
+                .AttachExternalCancellation(_lifeTime.Token);
+            
             await UniTask.SwitchToMainThread();
             
-            var placementResult = _awaitedRewards[placeId];
+            AdsShowResult placementResult = _awaitedRewards[placeId];
             
             _awaitedRewards.Remove(placeId);
             _isInProgress = false;
@@ -283,12 +316,7 @@ namespace UniGame.Ads.Runtime
             
             return placementResult;
         }
-        
-        public void ShowPlacement(string placeId, PlacementType type)
-        {
-            ShowPlacementAsync(placeId, type).Forget();
-        }
-        
+
         public async UniTask ShowPlacementAsync(string placeId, PlacementType type)
         {
             Debug.Log($"[ADS SERVICE]: Show PlacementAsync {placeId} : {type}");
@@ -356,7 +384,7 @@ namespace UniGame.Ads.Runtime
         
         public async UniTask<bool> IsPlacementAvailable(string placementName)
         {
-            if(_placements.TryGetValue(placementName,out var adsPlacement) == false)
+            if(_placements.TryGetValue(placementName,out PlatformAdsPlacement adsPlacement) == false)
             {
                 Debug.Log($"[ADS SERVICE]:Placement haven't {placementName}");
                 return false;
@@ -369,7 +397,7 @@ namespace UniGame.Ads.Runtime
                 case PlacementType.Rewarded:
                     return await LoadRewardedAd(placementName);
                 case PlacementType.Interstitial:
-                    return true;
+                    return await LoadInterstitialAd(adsPlacement.platformPlacement);
             }
             
             return false;
@@ -396,6 +424,7 @@ namespace UniGame.Ads.Runtime
         
         public void Dispose()
         {
+            Debug.Log("[ADS SERVICE]:Dispose");
             _lifeTime.Terminate();
 
             foreach (var (key, val) in _rewardedAdsCache)
@@ -421,6 +450,7 @@ namespace UniGame.Ads.Runtime
 
             return result;
         }
+        
         private void SubscribeToEvents()
         {
             _adsAction.Subscribe(LoadAdsAction).AddTo(_lifeTime);
@@ -654,13 +684,12 @@ namespace UniGame.Ads.Runtime
                     _applyRewardedCommand.Execute(rewardedResult);
                     return;
                 }
-                
-                SubscribeToInterstitialAdEvents(_interstitialAdCache);
             }
             
             if (_interstitialAdCache.CanShowAd())
             {
                 Debug.Log("Showing interstitial ad.");
+                SubscribeToInterstitialAdEvents(_interstitialAdCache);
                 _interstitialAdCache.Show();
             }
             else
@@ -697,16 +726,18 @@ namespace UniGame.Ads.Runtime
         
         private void InterstitialVideoOnAdClickedEvent()
         {
+            var message = "Interstitial: on ad clicked";
+            
             _adsAction.OnNext(new AdsActionData()
             {
                 PlacementName = _activePlacement,
-                Message = string.Empty,
+                Message = message,
                 ActionType = PlacementActionType.Clicked,
                 PlacementType = PlacementType.Rewarded,
                 SdkName = AdmobSdk,
             });
-            
-            Debug.Log("Interstitial: on ad clicked");
+
+            Debug.Log(message);
         }
         
         private void InterstitialVideoOnAdPaidEvent(AdValue adValue)
@@ -731,46 +762,54 @@ namespace UniGame.Ads.Runtime
         
         private void InterstitialVideoOnAdFullScreenContentClosedEvent()
         {
-            _adsAction.OnNext(new AdsActionData()
+            var message = "Interstitial: on ad full screen closed";
+            
+            _adsAction.OnNext(new AdsActionData
             {
                 PlacementName = _activePlacement,
-                Message = string.Empty,
+                Message = message,
                 ActionType = PlacementActionType.Closed,
                 PlacementType = PlacementType.Interstitial,
                 SdkName = AdmobSdk,
             });
-            Debug.Log("Interstitial: on ad full screen closed");
 
+            Debug.Log(message);
+            AddPlacementResult(_activePlacement, PlacementType.Interstitial, true, false, message);
             UnsubscribeToInterstitialAdEvents(_interstitialAdCache);
             _interstitialAdCache.Destroy();
         }
         private void InterstitialVideoOnAdFullScreenContentOpenedEvent()
         {
-            _adsAction.OnNext(new AdsActionData()
+            var message = "Interstitial: on ad full screen opened";
+            
+            _adsAction.OnNext(new AdsActionData
             {
                 PlacementName = _activePlacement,
-                Message = string.Empty,
+                Message = message,
                 ActionType = PlacementActionType.Opened,
                 PlacementType = PlacementType.Interstitial,
                 SdkName = AdmobSdk,
             });
-            
-            Debug.Log("Interstitial: on ad full screen opened");
+
+            Debug.Log(message);
         }
         private void InterstitialVideoOnAdFullScreenContentFailedEvent(AdError error)
         {
+            var message = "Interstitial: on ad full screen failed";
+            
             _adsAction.OnNext(new AdsActionData()
             {
                 PlacementName = _activePlacement,
-                Message = string.Empty,
+                Message = message,
                 ActionType = PlacementActionType.Failed,
                 PlacementType = PlacementType.Interstitial,
                 SdkName = AdmobSdk,
             });
             
+            AddPlacementResult(_activePlacement, PlacementType.Interstitial, false, true, message);
             UnsubscribeToInterstitialAdEvents(_interstitialAdCache);
             _interstitialAdCache.Destroy();
-            Debug.Log("Interstitial: on ad full screen failed");
+            Debug.Log(message);
         }
         
         #endregion

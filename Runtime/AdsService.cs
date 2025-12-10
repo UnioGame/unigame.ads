@@ -199,7 +199,7 @@
                 var isAvailable = await adsService.IsPlacementAvailable(placementId);
                 if(!isAvailable) continue;
                 
-                var result = await adsService.ShowRewardedAdAsync(placementId);
+                var result = await adsService.ShowInterstitialAdAsync(placementId);
                 return result;
             }
             
