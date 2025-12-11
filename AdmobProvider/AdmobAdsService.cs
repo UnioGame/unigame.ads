@@ -17,11 +17,11 @@ namespace UniGame.Ads.Runtime
     {
 #if UNITY_EDITOR || GAME_DEBUG
 #if UNITY_ANDROID
-        private const string TestAndroidInterstitialPlacementId = "ca-app-pub-3940256099942544/1033173712";
-        private const string TestAndroidRewardedPlacementId =     "ca-app-pub-3940256099942544/5224354917";
+        private const string TestInterstitialPlacementId = "ca-app-pub-3940256099942544/1033173712";
+        private const string TestRewardedPlacementId =     "ca-app-pub-3940256099942544/5224354917";
 #elif UNITY_IPHONE
-        private const string TestIphoneInterstitialPlacementId =  "ca-app-pub-3940256099942544/4411468910";
-        private const string TestIphoneRewardedPlacementId =      "ca-app-pub-3940256099942544/5224354917";
+        private const string TestInterstitialPlacementId =  "ca-app-pub-3940256099942544/4411468910";
+        private const string TestRewardedPlacementId =      "ca-app-pub-3940256099942544/5224354917";
 #endif
 #endif
         public const string AdmobSdk = "admob";
@@ -83,19 +83,18 @@ namespace UniGame.Ads.Runtime
 
             foreach (PlatformAdsPlacement placementData in _placements.Values)
             {
-                if (placementData.placementType != PlacementType.Rewarded) 
-                    continue;
-                
-                _rewardedAdsCache.Add(placementData.id, new AdmobRewardedAdsCache(placementData.platformPlacement));
-                LoadRewardedAd(placementData.id).Forget();
+                switch (placementData.placementType)
+                {
+                    case PlacementType.Interstitial:
+                        LoadInterstitialAd(placementData.platformPlacement).Forget();
+                        break;
+                    case PlacementType.Rewarded:
+                        _rewardedAdsCache.Add(placementData.id, new AdmobRewardedAdsCache(placementData.platformPlacement));
+                        LoadRewardedAd(placementData.id).Forget();
+                        break;
+                }
             }
 
-            foreach (PlatformAdsPlacement placementData in _placements.Values)
-            {
-                if (placementData.placementType == PlacementType.Interstitial)
-                    LoadInterstitialAd(placementData.platformPlacement).Forget();
-            }
-            
             _applyRewardedCommand
                 .Subscribe(ApplyRewardedCommand)
                 .AddTo(_lifeTime);
@@ -179,35 +178,24 @@ namespace UniGame.Ads.Runtime
         private string GetPlatformPlacementID(string placementId)
         {
 #if UNITY_EDITOR || GAME_DEBUG
-#if UNITY_ANDROID
-            string cppId = TestAndroidRewardedPlacementId;
-#elif UNITY_IPHONE
-            string cppId = TestIphoneRewardedPlacementId;
-#endif
+            return TestRewardedPlacementId;
 #else
-            var cppId = _placements[placementId].platformPlacement;
+            return _placements[placementId].platformPlacement;
 #endif
-            return cppId;
         }
 
         public async UniTask<bool> LoadInterstitialAd(string placementId)
         {
 #if UNITY_EDITOR || GAME_DEBUG
-    #if UNITY_ANDROID
-            placementId = TestAndroidInterstitialPlacementId;
-    #elif UNITY_IPHONE
-            placementId = _testIphoneInterstitialPlacementId;
-    #endif
+            placementId = TestInterstitialPlacementId;
 #endif
-            Debug.Log($"Placemend to load: {placementId}");
+            Debug.Log($"Interstitial placement loading: {placementId}");
             
             if (_interstitialAdCache != null)
             {
                 _interstitialAdCache.Destroy();
                 _interstitialAdCache = null;
             }
-
-            Debug.Log("Loading the interstitial ad.");
 
             var adRequest = new AdRequest();
             var loadComplete = false;
