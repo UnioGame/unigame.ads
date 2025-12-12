@@ -106,8 +106,10 @@ namespace UniGame.Ads.Runtime
 
         public void LoadAdsAction(AdsActionData actionData)
         {
+            if (actionData.PlacementType == PlacementType.Interstitial && actionData.ActionType == PlacementActionType.Closed)
+                LoadInterstitialAd(actionData.PlacementName).Forget();
+            
             Debug.Log($"[ADS SERVICE]:admob action: NAME:{actionData.PlacementName} ERROR:{actionData.ErrorCode} MESSAGE:{actionData.Message}");
-            return;
         }
 
         public async UniTask<bool> LoadRewardedAd(string placementId)
