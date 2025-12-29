@@ -108,8 +108,7 @@ namespace UniGame.Ads.Runtime
         {
             if (actionData.PlacementType == PlacementType.Interstitial && actionData.ActionType == PlacementActionType.Closed)
                 LoadInterstitialAd(actionData.PlacementName).Forget();
-            
-            Debug.Log($"[ADS SERVICE]:admob action: NAME:{actionData.PlacementName} ERROR:{actionData.ErrorCode} MESSAGE:{actionData.Message}");
+            // Debug.Log($"[ADS SERVICE]:admob action: NAME:{actionData.PlacementName}. ERROR:{actionData.ErrorCode}. MESSAGE:{actionData.Message}.");
         }
 
         public async UniTask<bool> LoadRewardedAd(string placementId)
@@ -302,7 +301,7 @@ namespace UniGame.Ads.Runtime
             _awaitedRewards.Remove(placeId);
             _isInProgress = false;
             
-            Debug.Log($"[ADS SERVICE]: Show {placeId} {type} result: {placementResult.Error} {placementResult.Message}");
+            Debug.Log($"[ADS SERVICE]: Show {placeId} {type}. Result: {placementResult.Rewarded} {placementResult.Message}");
             
             return placementResult;
         }
@@ -766,7 +765,7 @@ namespace UniGame.Ads.Runtime
             Debug.Log(message);
             AddPlacementResult(_activePlacement, PlacementType.Interstitial, true, false, message);
             UnsubscribeToInterstitialAdEvents(_interstitialAdCache);
-            _interstitialAdCache.Destroy();
+            _interstitialAdCache?.Destroy();
         }
         private void InterstitialVideoOnAdFullScreenContentOpenedEvent()
         {
