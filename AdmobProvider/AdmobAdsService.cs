@@ -15,7 +15,7 @@ namespace UniGame.Ads.Runtime
     [Serializable]
     public class AdmobAdsService : IAdsService
     {
-#if UNITY_EDITOR || GAME_DEBUG
+#if UNITY_EDITOR
 #if UNITY_ANDROID
         private const string TestInterstitialPlacementId = "ca-app-pub-3940256099942544/1033173712";
         private const string TestRewardedPlacementId =     "ca-app-pub-3940256099942544/5224354917";
@@ -115,18 +115,22 @@ namespace UniGame.Ads.Runtime
         {
             if (!_placements.TryGetValue(placementId, out var placementData))
                 return false;
-            
-            GameLog.Log($"Loading the rewarded ad {placementId}. " +
-                      $"Load:{_rewardedAdsCache[placementId].LoadProcess}. " +
-                      $"Cache:{_rewardedAdsCache[placementId].RewardedAd}");
-            
-            if(!_rewardedAdsCache.ContainsKey(placementId))
-                throw new Exception($"{placementId} not found into map");
+
+            GameLog.Log($"Loading the rewarded ad {placementId}");
+
+            if (!_rewardedAdsCache.ContainsKey(placementId))
+            {
+                Debug.LogError($"[ADS SERVICE] Haven't ads with id {placementId} into map");
+                return false;
+            }
             
             if (_rewardedAdsCache[placementId].LoadProcess == true)
             {
                 await UniTask
                     .WaitWhile(_rewardedAdsCache, x => x[placementId].LoadProcess == true,cancellationToken:_lifeTime);
+                
+                Debug.Log($"[ADS SERVICE] {placementId} downloading...");
+                return false;
             }
             
             var adsRewardedAd = _rewardedAdsCache[placementId].RewardedAd;
@@ -144,7 +148,7 @@ namespace UniGame.Ads.Runtime
             {
                 if (error != null || ad == null)
                 {
-                    Debug.LogError("Rewarded ad failed to load an ad " + "with error : " + error);
+                    Debug.LogError("[ADS SERVICE] Rewarded ad failed to load an ad with error: " + error);
                     loadComplete = true;
                     return;
                 }
@@ -168,7 +172,7 @@ namespace UniGame.Ads.Runtime
                 .AttachExternalCancellation(_lifeTime.Token);
             
             await UniTask.SwitchToMainThread();
-            
+
             _rewardedAdsCache[placementId].LoadProcess = false;
             _rewardedAdsCache[placementId].Available = loaded;    
             
@@ -178,7 +182,8 @@ namespace UniGame.Ads.Runtime
 
         private string GetPlatformPlacementID(string placementId)
         {
-#if UNITY_EDITOR || GAME_DEBUG
+            Debug.Log($"[ADS Service] Platform placement id for {placementId}: {_placements[placementId].platformPlacement}");
+#if UNITY_EDITOR
             return TestRewardedPlacementId;
 #else
             return _placements[placementId].platformPlacement;
@@ -187,9 +192,9 @@ namespace UniGame.Ads.Runtime
 
         public async UniTask<bool> LoadInterstitialAd(string placementId)
         {
-#if UNITY_EDITOR || GAME_DEBUG
-            placementId = TestInterstitialPlacementId;
-#endif
+// #if UNITY_EDITOR || GAME_DEBUG
+//             placementId = TestInterstitialPlacementId;
+// #endif
             Debug.Log($"Interstitial placement loading: {placementId}");
             
             if (_interstitialAdCache != null)
@@ -201,20 +206,19 @@ namespace UniGame.Ads.Runtime
             var adRequest = new AdRequest();
             var loadComplete = false;
             var loaded = false;
-            
+
             InterstitialAd.Load(placementId, adRequest,
                 (ad, error) =>
                 {
                     if (error != null || ad == null)
                     {
-                        Debug.LogError("interstitial ad failed to load an ad " + "with error : " + error);
+                        Debug.LogError("interstitial ad failed to load an ad with error: " + error);
                         loadComplete = true;
-
                         return;
                     }
-
+            
                     Debug.Log("Interstitial ad loaded with response : " + ad.GetResponseInfo());
-
+            
                     _interstitialAdCache = ad;
                     loadComplete = true;
                     loaded = true;

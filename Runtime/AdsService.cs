@@ -45,23 +45,19 @@
             }
         }
 
-        public bool RewardedAvailable
-        {
-            get
-            {
-                return _adsServices
-                    .Any(x => x.Value.RewardedAvailable);
-            }
-        }
+        public bool RewardedAvailable = true;
+            // get
+            // {
+            //     return _adsServices
+            //         .Any(x => x.Value.RewardedAvailable);
+            // }
 
-        public bool InterstitialAvailable 
-        {
-            get
-            {
-                return _adsServices
-                    .Any(x => x.Value.InterstitialAvailable);
-            }
-        }
+        public bool InterstitialAvailable = true;
+            // get
+            // {
+            //     return _adsServices
+            //         .Any(x => x.Value.InterstitialAvailable);
+            // }
 
         public Observable<AdsActionData> AdsAction => _adsActionSubject;
         

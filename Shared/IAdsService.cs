@@ -6,10 +6,6 @@
 
 	public interface IAdsService : IGameService
 	{
-		bool RewardedAvailable { get; }
-		
-		bool InterstitialAvailable { get; }
-		
 		Observable<AdsActionData> AdsAction { get; }
 
 		void ValidateIntegration();
