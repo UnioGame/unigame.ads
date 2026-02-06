@@ -51,7 +51,7 @@ namespace UniGame.Ads.Runtime
             AdsDataConfiguration config,
             Dictionary<string,PlatformAdsPlacement> placements)
         {
-            GameLog.Log($"[ADS SERVICE]: admob created");
+            GameLog.Log($"[AdmobAdsService] create ads service", Color.cyan);
 
             _platformName = platformName;
             _lifeTime = new LifeTime();
@@ -64,29 +64,27 @@ namespace UniGame.Ads.Runtime
 
         public ILifeTime LifeTime => _lifeTime;
 
-        public virtual bool RewardedAvailable => true;
-        public virtual bool InterstitialAvailable => true;
         public Observable<AdsActionData> AdsAction => _adsAction;
         public bool IsInProgress => _isInProgress;
 
         public async UniTask InitializeAsync()
         {
-            Debug.Log($"[ADS SERVICE]: admob initialization started");
-            
+            GameLog.Log($"[AdmobAdsService] initialize ads service", Color.cyan);
+
             MobileAds.Initialize(SdkInitializationCompletedEvent);
             
             var isInitialized = await _isInitialized
                 .Where(x => x)
                 .FirstAsync(_lifeTime.Token);
 
-            Debug.Log($"[ADS SERVICE]: admob initialized {isInitialized}");
+            GameLog.Log($"[AdmobAdsService] initialized ads service complete", Color.cyan);
 
             foreach (PlatformAdsPlacement placementData in _placements.Values)
             {
                 switch (placementData.placementType)
                 {
                     case PlacementType.Interstitial:
-                        LoadInterstitialAd(placementData.platformPlacement).Forget();
+                        LoadInterstitialAd(placementData.id).Forget();
                         break;
                     case PlacementType.Rewarded:
                         _rewardedAdsCache.Add(placementData.id, new AdmobRewardedAdsCache(placementData.platformPlacement));
@@ -98,29 +96,25 @@ namespace UniGame.Ads.Runtime
             _applyRewardedCommand
                 .Subscribe(ApplyRewardedCommand)
                 .AddTo(_lifeTime);
-            
-            LoadAdsAsync()
-                .AttachExternalCancellation(_lifeTime.Token)
-                .Forget();
         }
 
         public void LoadAdsAction(AdsActionData actionData)
         {
             if (actionData.PlacementType == PlacementType.Interstitial && actionData.ActionType == PlacementActionType.Closed)
                 LoadInterstitialAd(actionData.PlacementName).Forget();
-            // Debug.Log($"[ADS SERVICE]:admob action: NAME:{actionData.PlacementName}. ERROR:{actionData.ErrorCode}. MESSAGE:{actionData.Message}.");
         }
 
         public async UniTask<bool> LoadRewardedAd(string placementId)
         {
             if (!_placements.TryGetValue(placementId, out var placementData))
+            {
+                GameLog.LogError($"[AdmobAdsService] haven't ads with id {placementId}");
                 return false;
-
-            GameLog.Log($"Loading the rewarded ad {placementId}");
+            }
 
             if (!_rewardedAdsCache.ContainsKey(placementId))
             {
-                Debug.LogError($"[ADS SERVICE] Haven't ads with id {placementId} into map");
+                GameLog.LogError($"[AdmobAdsService] haven't ads with id {placementId} into rewarded map");
                 return false;
             }
             
@@ -129,7 +123,6 @@ namespace UniGame.Ads.Runtime
                 await UniTask
                     .WaitWhile(_rewardedAdsCache, x => x[placementId].LoadProcess == true,cancellationToken:_lifeTime);
                 
-                Debug.Log($"[ADS SERVICE] {placementId} downloading...");
                 return false;
             }
             
@@ -143,24 +136,20 @@ namespace UniGame.Ads.Runtime
             var cppId = GetPlatformPlacementID(placementId); 
             _rewardedAdsCache[placementId].LoadProcess = true;
 
-            Debug.Log($"[ADS SERVICE]:Loading cppId: {cppId}");
+            GameLog.Log($"[AdmobAdsService] load rewarded ad {placementId}", Color.cyan);
+            
             RewardedAd.Load(cppId, adRequest, (ad, error) =>
             {
                 if (error != null || ad == null)
                 {
-                    Debug.LogError("[ADS SERVICE] Rewarded ad failed to load an ad with error: " + error);
+                    GameLog.LogError($"[AdmobAdsService] rewarded ad failed to load an ad with error: {error}");
                     loadComplete = true;
+                    ReloadAds(placementId).Forget();
                     return;
                 }
-
+            
                 Debug.Log("[ADS SERVICE]:Rewarded ad loaded with response : " + ad.GetResponseInfo());
-
                 _rewardedAdsCache[placementId].RewardedAd = ad;
-                
-// #if GAME_ANALYTICS_SDK
-//                 if(ad!=null)
-//                     GameAnalyticsSDK.Events.GA_Ads...SubscribeAdMobImpressions(placementId, ad);     
-// #endif
                 
                 SubscribeToRewardedAdEvents(ad);
                 loaded = true;
@@ -176,27 +165,23 @@ namespace UniGame.Ads.Runtime
             _rewardedAdsCache[placementId].LoadProcess = false;
             _rewardedAdsCache[placementId].Available = loaded;    
             
-            Debug.Log($"[ADS SERVICE]:Rewarded ad loaded: {loaded}");
+            GameLog.Log($"[AdmobAdsService] {placementId} load complete, status: {loaded}", Color.cyan);
             return loaded;
         }
 
         private string GetPlatformPlacementID(string placementId)
         {
-            Debug.Log($"[ADS Service] Platform placement id for {placementId}: {_placements[placementId].platformPlacement}");
-#if UNITY_EDITOR
-            return TestRewardedPlacementId;
-#else
             return _placements[placementId].platformPlacement;
-#endif
         }
 
         public async UniTask<bool> LoadInterstitialAd(string placementId)
         {
-// #if UNITY_EDITOR || GAME_DEBUG
-//             placementId = TestInterstitialPlacementId;
-// #endif
-            Debug.Log($"Interstitial placement loading: {placementId}");
-            
+            if (!_placements.TryGetValue(placementId, out var placementData))
+            {
+                GameLog.LogError($"[AdmobAdsService] haven't ads with id {placementId}");
+                return false;
+            }
+
             if (_interstitialAdCache != null)
             {
                 _interstitialAdCache.Destroy();
@@ -206,14 +191,18 @@ namespace UniGame.Ads.Runtime
             var adRequest = new AdRequest();
             var loadComplete = false;
             var loaded = false;
+            var cppId = GetPlatformPlacementID(placementId); 
 
-            InterstitialAd.Load(placementId, adRequest,
+            GameLog.Log($"[AdmobAdsService] load interstitial ad {placementId}", Color.cyan);
+            
+            InterstitialAd.Load(cppId, adRequest,
                 (ad, error) =>
                 {
                     if (error != null || ad == null)
                     {
-                        Debug.LogError("interstitial ad failed to load an ad with error: " + error);
+                        GameLog.LogError($"[AdmobAdsService] {placementId} failed to load an ad with error: {error}");
                         loadComplete = true;
+                        ReloadAds(placementId).Forget();
                         return;
                     }
             
@@ -228,14 +217,34 @@ namespace UniGame.Ads.Runtime
                 .WaitWhile(() => loadComplete == false)
                 .AttachExternalCancellation(_lifeTime.Token);
 
+            GameLog.Log($"[AdmobAdsService] {placementId} load complete, status: {loaded}", Color.cyan);
+            
             return loaded;
         }
 
+        private async UniTask ReloadAds(string placementId)
+        {
+            await UniTask.Delay(TimeSpan.FromSeconds(_reloadAdsInterval));
+
+            var placement = _placements[placementId];
+
+            switch (placement.placementType)
+            {
+                case PlacementType.Interstitial:
+                    LoadInterstitialAd(placement.id).Forget();
+                    break;
+                case PlacementType.Rewarded:
+                    _rewardedAdsCache[placementId] = new AdmobRewardedAdsCache(placement.platformPlacement);
+                    LoadRewardedAd(placement.id).Forget();
+                    break;
+            }
+        }
+        
         public async UniTask<AdsShowResult> Show(string placementId)
         {
             if (!_placements.TryGetValue(placementId, out var placementItem))
             {
-                GameLog.LogError($"[ADS SERVICE]: Placement not found: {placementId}");
+                GameLog.LogError($"[AdmobAdsService]: Placement not found: {placementId}");
                 
                 return new AdsShowResult
                 {
@@ -253,7 +262,7 @@ namespace UniGame.Ads.Runtime
         
         public async UniTask<AdsShowResult> Show(string placeId, PlacementType type)
         {
-            Debug.Log($"[ADS SERVICE]: Show {placeId} {type}");
+            GameLog.Log($"[AdmobAdsService]: show {placeId} {type}", Color.cyan);
 
             if (_isInProgress)
             {
@@ -305,15 +314,13 @@ namespace UniGame.Ads.Runtime
             _awaitedRewards.Remove(placeId);
             _isInProgress = false;
             
-            Debug.Log($"[ADS SERVICE]: Show {placeId} {type}. Result: {placementResult.Rewarded} {placementResult.Message}");
+            GameLog.Log($"[AdmobAdsService]: show {placeId} {type}. result: {placementResult.Rewarded} {placementResult.Message}", Color.cyan);
             
             return placementResult;
         }
 
         public async UniTask ShowPlacementAsync(string placeId, PlacementType type)
         {
-            Debug.Log($"[ADS SERVICE]: Show PlacementAsync {placeId} : {type}");
-            
             switch (type)
             {
                 case PlacementType.Rewarded:
@@ -379,18 +386,21 @@ namespace UniGame.Ads.Runtime
         {
             if(_placements.TryGetValue(placementName,out PlatformAdsPlacement adsPlacement) == false)
             {
-                Debug.Log($"[ADS SERVICE]:Placement haven't {placementName}");
+                GameLog.LogError($"[AdmobAdsService]: Placement not found: {placementName}");
                 return false;
             }
-            
             var placementType = adsPlacement.placementType;
             
             switch (placementType)
             {
                 case PlacementType.Rewarded:
-                    return await LoadRewardedAd(placementName);
+                    var rewardedAdStatus = _rewardedAdsCache[placementName].Available;
+                    GameLog.Log($"[AdmobAdsService] Request placement {placementName} ready status: {rewardedAdStatus}", Color.cyan);
+                    return rewardedAdStatus;
                 case PlacementType.Interstitial:
-                    return await LoadInterstitialAd(adsPlacement.platformPlacement);
+                    var interstitialStatus = _interstitialAdCache != null;
+                    GameLog.Log($"[AdmobAdsService] Request placement {placementName} ready status: {interstitialStatus}", Color.cyan);
+                    return interstitialStatus;
             }
             
             return false;
@@ -412,12 +422,12 @@ namespace UniGame.Ads.Runtime
 
         public virtual async UniTask LoadAdsAsync()
         {
-            Debug.Log("[ADS SERVICE]:Do not implement preload into admob");
+            GameLog.LogError($"[AdmobAdsService]: common preload not implemented into admob");
         }
         
         public void Dispose()
         {
-            Debug.Log("[ADS SERVICE]:Dispose");
+            GameLog.Log("[AdmobAdsService]: dispose", Color.cyan);
             _lifeTime.Terminate();
 
             foreach (var (key, val) in _rewardedAdsCache)
@@ -453,34 +463,21 @@ namespace UniGame.Ads.Runtime
         
         private async UniTask ShowRewardedVideo(string placeId)
         {
-            Debug.Log($"[ADS SERVICE]: Try to show {placeId}");
+            if (!await IsPlacementAvailable(placeId))
+            {
+                var rewardedResult = new AdsShowResult { 
+                    PlacementName = placeId, 
+                    Rewarded = false, 
+                    Error = true,
+                    Message = AdsMessages.RewardedUnavailable
+                };
+                _applyRewardedCommand.Execute(rewardedResult);
+                return;
+            }
             
             var rewardedAd = _rewardedAdsCache[placeId].RewardedAd;
             
-            if (rewardedAd == null)
-            {
-                Debug.Log($"[ADS SERVICE]: Start load reward video {placeId}");
-                var loaded = await LoadRewardedAd(placeId);
-                Debug.Log($"[ADS SERVICE]: Complete load reward video {placeId}");
-
-                if (loaded == false)
-                {
-                    var rewardedResult = new AdsShowResult { 
-                        PlacementName = placeId, 
-                        Rewarded = false, 
-                        Error = true,
-                        Message = AdsMessages.RewardedUnavailable
-                    };
-                    
-                    _applyRewardedCommand.Execute(rewardedResult);
-                    
-                    return;
-                }
-
-                rewardedAd = _rewardedAdsCache[placeId].RewardedAd;
-            }
-            
-            if (rewardedAd!=null && rewardedAd.CanShowAd())
+            if (rewardedAd != null && rewardedAd.CanShowAd())
             {
                 _activePlacement = placeId;
                 rewardedAd.Show(reward =>
@@ -493,10 +490,6 @@ namespace UniGame.Ads.Runtime
                         Error = null,
                     }).Forget();
                 });
-            }
-            else
-            {
-                Debug.Log("[ADS SERVICE]:Something went wrong with CanShowAd");
             }
         }
         
@@ -579,17 +572,17 @@ namespace UniGame.Ads.Runtime
                 ErrorCode = 0,
             });
             
-            Debug.Log("[ADS SERVICE]: Rewarded: on ad clicked");
+            GameLog.Log($"[AdmobAdsService] rewarded: on ad clicked", Color.cyan);
         }
         
         private void RewardedVideoOnAdPaidEvent(AdValue adValue)
         {
-            Debug.Log("[ADS SERVICE]: Rewarded: on ad paid");
+            GameLog.Log($"[AdmobAdsService] rewarded: on ad paid", Color.cyan);
         }
         
         private void RewardedVideoOnAdImpressionRecordedEvent()
         {
-            Debug.Log("[ADS SERVICE]: Rewarded: on ad impression");
+            GameLog.Log($"[AdmobAdsService] rewarded: on ad impression", Color.cyan);
         }
         
         private void RewardedVideoOnAdFullScreenContentClosedEvent()
@@ -604,9 +597,7 @@ namespace UniGame.Ads.Runtime
                 PlacementType = PlacementType.Rewarded,
                 SdkName = AdmobSdk,
             });
-            
-            Debug.Log("[ADS SERVICE]: Rewarded: on ad full screen closed");
-            // CompleteRewardedVideo(false,AdsMessages.RewardedClosed);
+            GameLog.Log($"[AdmobAdsService] rewarded: on ad full screen closed", Color.cyan);
         }
         
         private void RewardedVideoOnAdFullScreenContentOpenedEvent()
@@ -620,7 +611,7 @@ namespace UniGame.Ads.Runtime
                 SdkName = AdmobSdk,
             });
             
-            Debug.Log("[ADS SERVICE]: Rewarded: on ad full screen opened");
+            GameLog.Log($"[AdmobAdsService] rewarded: on ad full screen opened", Color.cyan);
         }
         
         private void RewardedVideoOnAdFullScreenContentFailedEvent(AdError error)
@@ -662,32 +653,22 @@ namespace UniGame.Ads.Runtime
 
         private async UniTask ShowInterstitialVideo(string placeId)
         {
-            if (_interstitialAdCache == null)
+            if (!await IsPlacementAvailable(placeId))
             {
-                var loaded = await LoadInterstitialAd(placeId);
-
-                if (loaded == false)
-                {
-                    var rewardedResult = new AdsShowResult { 
-                        PlacementName = placeId, 
-                        Rewarded = false, 
-                        Error = true,
-                        Message = AdsMessages.RewardedUnavailable
-                    };
-                    _applyRewardedCommand.Execute(rewardedResult);
-                    return;
-                }
+                var interstitialResult = new AdsShowResult { 
+                    PlacementName = placeId, 
+                    Rewarded = false, 
+                    Error = true,
+                    Message = AdsMessages.RewardedUnavailable
+                };
+                _applyRewardedCommand.Execute(interstitialResult);
+                return;
             }
             
             if (_interstitialAdCache.CanShowAd())
             {
-                Debug.Log("Showing interstitial ad.");
                 SubscribeToInterstitialAdEvents(_interstitialAdCache);
                 _interstitialAdCache.Show();
-            }
-            else
-            {
-                Debug.LogError("Interstitial ad is not ready yet.");
             }
         }
         
@@ -730,7 +711,7 @@ namespace UniGame.Ads.Runtime
                 SdkName = AdmobSdk,
             });
 
-            Debug.Log(message);
+            GameLog.Log($"[AdmobAdsService] interstitial: on ad clicked", Color.cyan);
         }
         
         private void InterstitialVideoOnAdPaidEvent(AdValue adValue)
@@ -745,12 +726,12 @@ namespace UniGame.Ads.Runtime
                 SdkName = AdmobSdk,
             });
             
-            Debug.Log("Interstitial: on ad paid");
+            GameLog.Log($"[AdmobAdsService] interstitial: on ad paid", Color.cyan);
         }
         
         private void InterstitialVideoOnAdImpressionRecordedEvent()
         {
-            Debug.Log("Interstitial: on ad impression");
+            GameLog.Log($"[AdmobAdsService] interstitial: on ad impression", Color.cyan);
         }
         
         private void InterstitialVideoOnAdFullScreenContentClosedEvent()
@@ -766,7 +747,8 @@ namespace UniGame.Ads.Runtime
                 SdkName = AdmobSdk,
             });
 
-            Debug.Log(message);
+            GameLog.Log($"[AdmobAdsService] interstitial: on ad full screen closed", Color.cyan);
+            
             AddPlacementResult(_activePlacement, PlacementType.Interstitial, true, false, message);
             UnsubscribeToInterstitialAdEvents(_interstitialAdCache);
             _interstitialAdCache?.Destroy();
@@ -783,8 +765,8 @@ namespace UniGame.Ads.Runtime
                 PlacementType = PlacementType.Interstitial,
                 SdkName = AdmobSdk,
             });
-
-            Debug.Log(message);
+            
+            GameLog.Log($"[AdmobAdsService] interstitial: on ad full screen opened", Color.cyan);
         }
         private void InterstitialVideoOnAdFullScreenContentFailedEvent(AdError error)
         {
