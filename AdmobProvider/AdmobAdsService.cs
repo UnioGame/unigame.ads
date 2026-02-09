@@ -752,6 +752,9 @@ namespace UniGame.Ads.Runtime
             AddPlacementResult(_activePlacement, PlacementType.Interstitial, true, false, message);
             UnsubscribeToInterstitialAdEvents(_interstitialAdCache);
             _interstitialAdCache?.Destroy();
+            _interstitialAdCache = null;
+
+            LoadInterstitialAd(_activePlacement).Forget();
         }
         private void InterstitialVideoOnAdFullScreenContentOpenedEvent()
         {
