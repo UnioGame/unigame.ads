@@ -142,7 +142,7 @@ namespace UniGame.Ads.Runtime
             {
                 if (error != null || ad == null)
                 {
-                    GameLog.LogError($"[AdmobAdsService] rewarded ad failed to load an ad with error: {error}");
+                    GameLog.Log($"[AdmobAdsService] rewarded ad failed to load an ad with error: {error}", Color.yellow);
                     loadComplete = true;
                     ReloadAds(placementId).Forget();
                     return;
@@ -200,7 +200,7 @@ namespace UniGame.Ads.Runtime
                 {
                     if (error != null || ad == null)
                     {
-                        GameLog.LogError($"[AdmobAdsService] {placementId} failed to load an ad with error: {error}");
+                        GameLog.Log($"[AdmobAdsService] {placementId} failed to load an ad with error: {error}", Color.yellow);
                         loadComplete = true;
                         ReloadAds(placementId).Forget();
                         return;
