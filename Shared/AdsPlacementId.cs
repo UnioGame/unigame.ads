@@ -78,7 +78,7 @@ namespace UniGame.Ads.Runtime
             return new AdsPlacementId { value = v };
         }
 
-        public override string ToString() => value.ToString();
+        public override string ToString() => string.IsNullOrEmpty(value) ? string.Empty : value;
 
         public override int GetHashCode() => value == null ? 0 : value.GetHashCode();
 
