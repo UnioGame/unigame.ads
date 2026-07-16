@@ -15,7 +15,8 @@ namespace UniGame.Ads.Runtime
     [Serializable]
     public class AdmobAdsService : IAdsService
     {
-#if UNITY_EDITOR
+        private const string MediationGroupNameKey = "mediation_group_name";
+
 #if UNITY_ANDROID
         private const string TestInterstitialPlacementId = "ca-app-pub-3940256099942544/1033173712";
         private const string TestRewardedPlacementId =     "ca-app-pub-3940256099942544/5224354917";
@@ -23,7 +24,7 @@ namespace UniGame.Ads.Runtime
         private const string TestInterstitialPlacementId =  "ca-app-pub-3940256099942544/4411468910";
         private const string TestRewardedPlacementId =      "ca-app-pub-3940256099942544/5224354917";
 #endif
-#endif
+
         public const string AdmobSdk = "admob";
 
         private LifeTime _lifeTime;
@@ -180,10 +181,25 @@ namespace UniGame.Ads.Runtime
 
         private void LogAdLoaded(string adType, string placementId, string adUnitId, ResponseInfo responseInfo)
         {
+#if GAME_DEBUG && (UNITY_ANDROID || UNITY_IOS || UNITY_IPHONE)
+            var loadedAdapter = responseInfo?.GetLoadedAdapterResponseInfo();
+            var responseExtras = responseInfo?.GetResponseExtras();
+            var mediationGroupName = string.Empty;
+            responseExtras?.TryGetValue(MediationGroupNameKey, out mediationGroupName);
+
+            GameLog.Log($"[AdmobAdsService] {adType} ad loaded: " +
+                        $"runtimePlatform={Application.platform}, provider={_platformName}, " +
+                        $"placement={placementId}, adUnitId={adUnitId}, " +
+                        $"responseId={responseInfo?.GetResponseId() ?? string.Empty}, " +
+                        $"adapter={loadedAdapter?.AdapterClassName ?? string.Empty}, " +
+                        $"adSource={loadedAdapter?.AdSourceName ?? string.Empty}, " +
+                        $"mediationGroup={mediationGroupName}", Color.cyan);
+#else
             GameLog.Log($"[AdmobAdsService] {adType} ad loaded: " +
                         $"runtimePlatform={Application.platform}, provider={_platformName}, " +
                         $"placement={placementId}, adUnitId={adUnitId}, " +
                         $"responseId={responseInfo?.GetResponseId() ?? string.Empty}", Color.cyan);
+#endif
         }
 
         private void LogAdLoadFailed(string adType, string placementId, string adUnitId, LoadAdError error)
@@ -826,6 +842,32 @@ namespace UniGame.Ads.Runtime
         
         private void SdkInitializationCompletedEvent(InitializationStatus status)
         {
+#if GAME_DEBUG && (UNITY_ANDROID || UNITY_IOS || UNITY_IPHONE)
+            if (status == null)
+            {
+                GameLog.LogWarning("[AdmobAdsService] Google Mobile Ads initialization status is null");
+            }
+            else
+            {
+                var adapterStatusMap = status.getAdapterStatusMap();
+                if (adapterStatusMap == null)
+                {
+                    GameLog.LogWarning("[AdmobAdsService] Google Mobile Ads adapter status map is null");
+                }
+                else
+                {
+                    foreach (var adapterStatus in adapterStatusMap)
+                    {
+                        GameLog.Log($"[AdmobAdsService] Mediation adapter status: " +
+                                    $"adapter={adapterStatus.Key}, " +
+                                    $"state={adapterStatus.Value.InitializationState}, " +
+                                    $"latencyMs={adapterStatus.Value.Latency}, " +
+                                    $"description={adapterStatus.Value.Description}", Color.cyan);
+                    }
+                }
+            }
+#endif
+
             _isInitialized.Value = true;
         }
     }
