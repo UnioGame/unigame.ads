@@ -80,13 +80,15 @@ namespace UniGame.Ads.Runtime
 
         public UniTask RunAsync()
         {
-            if (_consentFlowStarted)
-                return _consentFlowTask;
-
-            _consentFlowStarted = true;
+            // if (_consentFlowStarted)
+            //     return _consentFlowTask;
+            //
+            // _consentFlowStarted = true;
             GameLog.Log($"{ConsentLogTag} consent flow started", Color.cyan);
-            _consentFlowTask = RunConsentFlowAsync();
-            return _consentFlowTask;
+            // _consentFlowTask = RunConsentFlowAsync();
+            // return _consentFlowTask;
+
+            return RunConsentFlowAsync();
         }
 
         public async UniTask InitializeAsync()
