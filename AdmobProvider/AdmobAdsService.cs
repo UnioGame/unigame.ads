@@ -3,6 +3,7 @@ namespace UniGame.Ads.Runtime
     using UnityEngine;
     using System;
     using System.Collections.Generic;
+    using System.Threading;
     using Cysharp.Threading.Tasks;
     using Game.Modules.unigame.ads.Shared;
     using GoogleMobileAds.Api;
@@ -34,7 +35,9 @@ namespace UniGame.Ads.Runtime
 
         private string _activePlacement = string.Empty;
         private bool _isInProgress;
-        private bool _rewardedAdReceived;
+        private float _rewardAfterCloseTimeoutSeconds;
+        private long _nextRewardedAttemptId;
+        private RewardedShowAttempt _activeRewardedAttempt;
         private float _reloadAdsInterval;
         private float _lastAdsReloadTime;
         private bool _loadingAds;
@@ -55,6 +58,29 @@ namespace UniGame.Ads.Runtime
         private Dictionary<string, AdmobRewardedAdsCache> _rewardedAdsCache = new();
         private IAdsConsentService _consentService;
 
+        private sealed class RewardedShowAttempt
+        {
+            public RewardedShowAttempt(long id, string placementId, RewardedAd ad)
+            {
+                Id = id;
+                PlacementId = placementId;
+                Ad = ad;
+            }
+
+            public readonly long Id;
+            public readonly string PlacementId;
+            public readonly RewardedAd Ad;
+            public bool Closed;
+            public bool Resolved;
+            public CancellationTokenSource TimeoutCancellation;
+            public Action ClosedHandler;
+            public Action<AdError> FailedHandler;
+            public Action OpenedHandler;
+            public Action ClickedHandler;
+            public Action ImpressionHandler;
+            public Action<AdValue> PaidHandler;
+        }
+
         public AdmobAdsService(
             string platformName,
             AdsDataConfiguration config,
@@ -66,6 +92,7 @@ namespace UniGame.Ads.Runtime
             _platformName = platformName;
             _lifeTime = new LifeTime();
             _reloadAdsInterval = config.reloadAdsInterval;
+            _rewardAfterCloseTimeoutSeconds = config.rewardAfterCloseTimeoutSeconds;
             _lastAdsReloadTime = -_reloadAdsInterval;
             _placements = placements;
             _consentService = consentService;
@@ -222,7 +249,6 @@ namespace UniGame.Ads.Runtime
                 LogAdLoaded("rewarded", placementId, cppId, ad.GetResponseInfo());
                 _rewardedAdsCache[placementId].RewardedAd = ad;
                 
-                SubscribeToRewardedAdEvents(ad);
                 loaded = true;
                 loadComplete = true;
             });
@@ -380,7 +406,7 @@ namespace UniGame.Ads.Runtime
         {
             GameLog.Log($"[AdmobAdsService]: show {placeId} {type}", Color.cyan);
 
-            if (_isInProgress)
+            if (_isInProgress || _activeRewardedAttempt != null)
             {
                 return new AdsShowResult()
                 {
@@ -406,7 +432,7 @@ namespace UniGame.Ads.Runtime
 
             if (!await IsPlacementAvailable(placeId))
             {
-                AddPlacementResult(placeId,type,false,true,AdsMessages.PlacementCapped);
+                _isInProgress = false;
                 return new AdsShowResult()
                 {
                     PlacementName = placeId,
@@ -547,11 +573,16 @@ namespace UniGame.Ads.Runtime
         public void Dispose()
         {
             GameLog.Log("[AdmobAdsService]: dispose", Color.cyan);
-            _lifeTime.Terminate();
+            var attempt = _activeRewardedAttempt;
+            _activeRewardedAttempt = null;
+            if (attempt != null)
+            {
+                CancelRewardTimeout(attempt);
+                UnsubscribeToRewardedAdEvents(attempt);
+                attempt.Ad.Destroy();
+            }
 
-            foreach (var (key, val) in _rewardedAdsCache)
-                UnsubscribeToRewardedAdEvents(_rewardedAdsCache[key].RewardedAd);
-            
+            _lifeTime.Terminate();
             UnsubscribeToInterstitialAdEvents(_interstitialAdCache);
         }
         
@@ -608,57 +639,76 @@ namespace UniGame.Ads.Runtime
             
             var rewardedAd = _rewardedAdsCache[placeId].RewardedAd;
             
-            if (rewardedAd != null && rewardedAd.CanShowAd())
+            if (rewardedAd == null || !rewardedAd.CanShowAd())
             {
-                _activePlacement = placeId;
-                _rewardedAdReceived = false;
-                rewardedAd.Show(reward =>
+                var cache = _rewardedAdsCache[placeId];
+                cache.Available = false;
+                cache.RewardedAd = null;
+                rewardedAd?.Destroy();
+                LoadRewardedAd(placeId).Forget();
+                _applyRewardedCommand.Execute(new AdsShowResult
                 {
-                    _rewardedAdReceived = true;
-                    CompleteRewardedVideoAsync(new AdmobRewardedResult
-                    {
-                        Reward = reward,
-                        PlacementId = _activePlacement,
-                        Message = string.Empty,
-                        Error = null,
-                    }).Forget();
+                    PlacementName = placeId,
+                    PlacementType = PlacementType.Rewarded,
+                    Rewarded = false,
+                    Error = true,
+                    Message = AdsMessages.RewardedUnavailable,
                 });
+                return;
             }
+
+            _activePlacement = placeId;
+            var attempt = new RewardedShowAttempt(++_nextRewardedAttemptId, placeId, rewardedAd);
+            _activeRewardedAttempt = attempt;
+            SubscribeToRewardedAdEvents(attempt);
+
+            rewardedAd.Show(reward =>
+                CompleteRewardedVideoAsync(attempt, new AdmobRewardedResult
+                {
+                    Reward = reward,
+                    PlacementId = attempt.PlacementId,
+                    Message = string.Empty,
+                    Error = null,
+                }).Forget());
         }
         
-        private async UniTask CompleteRewardedVideoAsync(AdmobRewardedResult adResult)
+        private async UniTask CompleteRewardedVideoAsync(RewardedShowAttempt attempt, AdmobRewardedResult adResult)
         {
-            var placementId = _activePlacement;
             await UniTask.SwitchToMainThread();
-            
+
+            if (_lifeTime.IsTerminated || !ReferenceEquals(_activeRewardedAttempt, attempt) || attempt.Resolved)
+                return;
+
+            attempt.Resolved = true;
+            CancelRewardTimeout(attempt);
+
+            var placementId = attempt.PlacementId;
             var rewarded = adResult.Reward != null;
             var adError = adResult.Error;
             var reward = adResult.Reward;
-            
-            var error = adError !=null ? adError.GetMessage() : string.Empty;
+            var error = adError != null ? adError.GetMessage() : string.Empty;
             var message = rewarded
                 ? adResult.Message
                 : string.IsNullOrEmpty(error) ? adResult.Message : error;
             var rewardName = reward != null ? reward.Type : placementId;
             var rewardAmount = reward?.Amount ?? 0f;
             var errorCode = adError?.GetCode() ?? 0;
-            
-            if(!_awaitedRewards.TryGetValue(placementId,out var result))
+
+            if (attempt.Closed || !rewarded)
+                KillRewardedAds(attempt);
+
+            _applyRewardedCommand.Execute(new AdsShowResult
             {
-                var rewardedResult = new AdsShowResult { 
-                    PlacementName = placementId, 
-                    Rewarded = rewarded,
-                    Error = !rewarded,
-                    Message = message,
-                    PlacementType = PlacementType.Rewarded,
-                    RewardName = rewardName,
-                    RewardAmount = (float)rewardAmount,
-                };
-                
-                _applyRewardedCommand.Execute(rewardedResult);
-            }
-            
-            _adsAction.OnNext(new AdsActionData()
+                PlacementName = placementId,
+                Rewarded = rewarded,
+                Error = !rewarded,
+                Message = message,
+                PlacementType = PlacementType.Rewarded,
+                RewardName = rewardName,
+                RewardAmount = (float)rewardAmount,
+            });
+
+            _adsAction.OnNext(new AdsActionData
             {
                 PlacementName = placementId,
                 Message = message,
@@ -670,37 +720,82 @@ namespace UniGame.Ads.Runtime
                 Duration = 30,
                 ErrorCode = errorCode,
             });
+
+            GameLog.Log($"[AdmobAdsService] rewarded attempt {attempt.Id} resolved: " +
+                        $"placement={placementId}, rewarded={rewarded}, closed={attempt.Closed}, message={message}", Color.cyan);
         }
-        
-        private void SubscribeToRewardedAdEvents(RewardedAd rewardedAd)
+
+        private async UniTask WaitForRewardAfterCloseAsync(RewardedShowAttempt attempt, CancellationToken token)
         {
-            if(rewardedAd == null) return;
-            
-            rewardedAd.OnAdClicked += RewardedVideoOnAdClickedEvent;
-            rewardedAd.OnAdPaid += RewardedVideoOnAdPaidEvent;
-            rewardedAd.OnAdImpressionRecorded += RewardedVideoOnAdImpressionRecordedEvent;
-            rewardedAd.OnAdFullScreenContentClosed += RewardedVideoOnAdFullScreenContentClosedEvent;
-            rewardedAd.OnAdFullScreenContentFailed += RewardedVideoOnAdFullScreenContentFailedEvent;
-            rewardedAd.OnAdFullScreenContentOpened += RewardedVideoOnAdFullScreenContentOpenedEvent;
-        }
-        
-        private void UnsubscribeToRewardedAdEvents(RewardedAd rewardedAd)
-        {
-            if(rewardedAd == null) return;
-            
-            rewardedAd.OnAdClicked -= RewardedVideoOnAdClickedEvent;
-            rewardedAd.OnAdPaid -= RewardedVideoOnAdPaidEvent;
-            rewardedAd.OnAdImpressionRecorded -= RewardedVideoOnAdImpressionRecordedEvent;
-            rewardedAd.OnAdFullScreenContentClosed -= RewardedVideoOnAdFullScreenContentClosedEvent;
-            rewardedAd.OnAdFullScreenContentFailed -= RewardedVideoOnAdFullScreenContentFailedEvent;
-            rewardedAd.OnAdFullScreenContentOpened -= RewardedVideoOnAdFullScreenContentOpenedEvent;
-        }
-        
-        private void RewardedVideoOnAdClickedEvent()
-        {
-            _adsAction.OnNext(new AdsActionData()
+            try
             {
-                PlacementName = _activePlacement,
+                await UniTask.Delay(TimeSpan.FromSeconds(_rewardAfterCloseTimeoutSeconds),
+                    DelayType.Realtime, cancellationToken: token);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+
+            await CompleteRewardedVideoAsync(attempt, new AdmobRewardedResult
+            {
+                Reward = null,
+                PlacementId = attempt.PlacementId,
+                Message = "Rewarded ad closed without a reward callback before timeout.",
+                Error = null,
+            });
+        }
+
+        private static void CancelRewardTimeout(RewardedShowAttempt attempt)
+        {
+            var cancellation = attempt.TimeoutCancellation;
+            if (cancellation == null)
+                return;
+
+            attempt.TimeoutCancellation = null;
+            cancellation.Cancel();
+            cancellation.Dispose();
+        }
+
+        private void SubscribeToRewardedAdEvents(RewardedShowAttempt attempt)
+        {
+            attempt.ClosedHandler = () => RewardedVideoOnAdFullScreenContentClosedEventAsync(attempt).Forget();
+            attempt.FailedHandler = error => RewardedVideoOnAdFullScreenContentFailedEventAsync(attempt, error).Forget();
+            attempt.OpenedHandler = () => RewardedVideoOnAdFullScreenContentOpenedEventAsync(attempt).Forget();
+            attempt.ClickedHandler = () => RewardedVideoOnAdClickedEventAsync(attempt).Forget();
+            attempt.ImpressionHandler = () => RewardedVideoOnAdImpressionRecordedEventAsync(attempt).Forget();
+            attempt.PaidHandler = value => RewardedVideoOnAdPaidEventAsync(attempt, value).Forget();
+
+            attempt.Ad.OnAdFullScreenContentClosed += attempt.ClosedHandler;
+            attempt.Ad.OnAdFullScreenContentFailed += attempt.FailedHandler;
+            attempt.Ad.OnAdFullScreenContentOpened += attempt.OpenedHandler;
+            attempt.Ad.OnAdClicked += attempt.ClickedHandler;
+            attempt.Ad.OnAdImpressionRecorded += attempt.ImpressionHandler;
+            attempt.Ad.OnAdPaid += attempt.PaidHandler;
+        }
+
+        private void UnsubscribeToRewardedAdEvents(RewardedShowAttempt attempt)
+        {
+            attempt.Ad.OnAdFullScreenContentClosed -= attempt.ClosedHandler;
+            attempt.Ad.OnAdFullScreenContentFailed -= attempt.FailedHandler;
+            attempt.Ad.OnAdFullScreenContentOpened -= attempt.OpenedHandler;
+            attempt.Ad.OnAdClicked -= attempt.ClickedHandler;
+            attempt.Ad.OnAdImpressionRecorded -= attempt.ImpressionHandler;
+            attempt.Ad.OnAdPaid -= attempt.PaidHandler;
+        }
+
+        private bool IsCurrentRewardedAttempt(RewardedShowAttempt attempt) =>
+            !_lifeTime.IsTerminated && ReferenceEquals(_activeRewardedAttempt, attempt);
+
+        private async UniTask RewardedVideoOnAdClickedEventAsync(RewardedShowAttempt attempt)
+        {
+            await UniTask.SwitchToMainThread();
+            if (!IsCurrentRewardedAttempt(attempt))
+                return;
+
+            _adsAction.OnNext(new AdsActionData
+            {
+                PlacementName = attempt.PlacementId,
                 Message = string.Empty,
                 ActionType = PlacementActionType.Clicked,
                 PlacementType = PlacementType.Rewarded,
@@ -708,88 +803,110 @@ namespace UniGame.Ads.Runtime
                 Duration = 0,
                 ErrorCode = 0,
             });
-            
-            GameLog.Log($"[AdmobAdsService] rewarded: on ad clicked", Color.cyan);
-        }
-        
-        private void RewardedVideoOnAdPaidEvent(AdValue adValue)
-        {
-            GameLog.Log($"[AdmobAdsService] rewarded: on ad paid", Color.cyan);
-        }
-        
-        private void RewardedVideoOnAdImpressionRecordedEvent()
-        {
-            var rewardedAd = _rewardedAdsCache[_activePlacement].RewardedAd;
-            LogAdImpression("rewarded", _activePlacement, rewardedAd.GetResponseInfo());
-        }
-        
-        private void RewardedVideoOnAdFullScreenContentClosedEvent()
-        {
-            if (!_rewardedAdReceived)
-            {
-                CompleteRewardedVideoAsync(new AdmobRewardedResult
-                {
-                    Reward = null,
-                    PlacementId = _activePlacement,
-                    Message = "Rewarded ad was closed before reward.",
-                    Error = null,
-                }).Forget();
-            }
 
-            KillRewardedAds(_activePlacement);
-            
-            _adsAction.OnNext(new AdsActionData()
+            GameLog.Log($"[AdmobAdsService] rewarded attempt {attempt.Id}: on ad clicked", Color.cyan);
+        }
+
+        private async UniTask RewardedVideoOnAdPaidEventAsync(RewardedShowAttempt attempt, AdValue adValue)
+        {
+            await UniTask.SwitchToMainThread();
+            if (!IsCurrentRewardedAttempt(attempt))
+                return;
+
+            GameLog.Log($"[AdmobAdsService] rewarded attempt {attempt.Id}: on ad paid", Color.cyan);
+        }
+
+        private async UniTask RewardedVideoOnAdImpressionRecordedEventAsync(RewardedShowAttempt attempt)
+        {
+            await UniTask.SwitchToMainThread();
+            if (!IsCurrentRewardedAttempt(attempt))
+                return;
+
+            LogAdImpression("rewarded", attempt.PlacementId, attempt.Ad.GetResponseInfo());
+        }
+        
+        private async UniTask RewardedVideoOnAdFullScreenContentClosedEventAsync(RewardedShowAttempt attempt)
+        {
+            await UniTask.SwitchToMainThread();
+
+            if (_lifeTime.IsTerminated || !ReferenceEquals(_activeRewardedAttempt, attempt) || attempt.Closed)
+                return;
+
+            attempt.Closed = true;
+            if (_rewardedAdsCache.TryGetValue(attempt.PlacementId, out var cache) &&
+                ReferenceEquals(cache.RewardedAd, attempt.Ad))
+                cache.Available = false;
+
+            _adsAction.OnNext(new AdsActionData
             {
-                PlacementName = _activePlacement,
+                PlacementName = attempt.PlacementId,
                 Message = string.Empty,
                 ActionType = PlacementActionType.Closed,
                 PlacementType = PlacementType.Rewarded,
                 SdkName = AdmobSdk,
             });
-            GameLog.Log($"[AdmobAdsService] rewarded: on ad full screen closed", Color.cyan);
-        }
-        
-        private void RewardedVideoOnAdFullScreenContentOpenedEvent()
-        {
-            _adsAction.OnNext(new AdsActionData()
+            GameLog.Log($"[AdmobAdsService] rewarded attempt {attempt.Id} closed: " +
+                        $"placement={attempt.PlacementId}, rewarded={attempt.Resolved}", Color.cyan);
+
+            if (attempt.Resolved)
             {
-                PlacementName = _activePlacement,
+                KillRewardedAds(attempt);
+                return;
+            }
+
+            attempt.TimeoutCancellation = CancellationTokenSource.CreateLinkedTokenSource(_lifeTime.Token);
+            WaitForRewardAfterCloseAsync(attempt, attempt.TimeoutCancellation.Token).Forget();
+        }
+
+        private async UniTask RewardedVideoOnAdFullScreenContentOpenedEventAsync(RewardedShowAttempt attempt)
+        {
+            await UniTask.SwitchToMainThread();
+            if (!IsCurrentRewardedAttempt(attempt))
+                return;
+
+            _adsAction.OnNext(new AdsActionData
+            {
+                PlacementName = attempt.PlacementId,
                 Message = string.Empty,
                 ActionType = PlacementActionType.Opened,
                 PlacementType = PlacementType.Rewarded,
                 SdkName = AdmobSdk,
             });
-            
-            GameLog.Log($"[AdmobAdsService] rewarded: on ad full screen opened", Color.cyan);
+
+            GameLog.Log($"[AdmobAdsService] rewarded attempt {attempt.Id}: on ad full screen opened", Color.cyan);
         }
-        
-        private void RewardedVideoOnAdFullScreenContentFailedEvent(AdError error)
+
+        private UniTask RewardedVideoOnAdFullScreenContentFailedEventAsync(
+            RewardedShowAttempt attempt, AdError error)
         {
-            CompleteRewardedVideoAsync(new AdmobRewardedResult
+            return CompleteRewardedVideoAsync(attempt, new AdmobRewardedResult
             {
                 Reward = null,
-                PlacementId = _activePlacement,
+                PlacementId = attempt.PlacementId,
                 Message = string.Empty,
                 Error = error,
-            }).Forget();
+            });
         }
 
-        private void KillRewardedAds(string placementId)
+        private void KillRewardedAds(RewardedShowAttempt attempt)
         {
-            if (!_rewardedAdsCache.TryGetValue(placementId, out var adsRewardedAd))
+            if (!ReferenceEquals(_activeRewardedAttempt, attempt))
                 return;
-            
-            var rewardedAd = adsRewardedAd.RewardedAd;
-            if(rewardedAd == null) return;
-            
-            UnsubscribeToRewardedAdEvents(rewardedAd);
-            
-            rewardedAd.Destroy();
-            adsRewardedAd.RewardedAd = null;
 
-            LoadRewardedAd(placementId).Forget();
+            _activeRewardedAttempt = null;
+            CancelRewardTimeout(attempt);
+            UnsubscribeToRewardedAdEvents(attempt);
+            attempt.Ad.Destroy();
+
+            if (!_rewardedAdsCache.TryGetValue(attempt.PlacementId, out var cache) ||
+                !ReferenceEquals(cache.RewardedAd, attempt.Ad))
+                return;
+
+            cache.RewardedAd = null;
+            cache.Available = false;
+            LoadRewardedAd(attempt.PlacementId).Forget();
         }
-        
+
         private void ApplyRewardedCommand(AdsShowResult result)
         {
             _rewardedHistory.Add(result);

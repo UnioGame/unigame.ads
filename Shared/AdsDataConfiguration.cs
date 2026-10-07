@@ -10,6 +10,7 @@ namespace UniGame.Ads.Runtime
     public class AdsDataConfiguration
     {
         public float reloadAdsInterval = 30f;
+        public float rewardAfterCloseTimeoutSeconds = 3f;
 
 #if ODIN_INSPECTOR
         [BoxGroup("interstitial platforms", ShowLabel = false)]
