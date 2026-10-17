@@ -74,12 +74,17 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
         
         public async UniTask<bool> LoadRewardedAd(string placementId)
         {
+            // The cache is filled only after MobileAds.Initialize completes; a tap before that used to throw
+            // KeyNotFoundException (swallowed by Forget) and the placement looked unavailable.
+            if (!_rewardedAdsCache.ContainsKey(placementId))
+            {
+                Debug.Log($"[ADS SERVICE]: rewarded placement {placementId} is not initialized yet");
+                return false;
+            }
+
             Debug.Log($"Loading the rewarded ad {placementId}. " +
                       $"Load:{_rewardedAdsCache[placementId].LoadProcess}. " +
                       $"Cache:{_rewardedAdsCache[placementId].RewardedAd}");
-            
-            if(!_rewardedAdsCache.ContainsKey(placementId))
-                throw new Exception($"{placementId} not found into map");
             
             if (_rewardedAdsCache[placementId].LoadProcess == true)
             {
@@ -135,6 +140,8 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
             _rewardedAdsCache[placementId].Available = loaded;    
             
             Debug.Log($"[ADS SERVICE]:Rewarded ad loaded: {loaded}");
+            if (!loaded)
+                RetryRewardedLoadAsync(placementId).Forget();
             return loaded;
         }
         
@@ -328,6 +335,32 @@ namespace Game.Runtime.Game.Liveplay.Ads.Runtime
             
         }
         
+        private const float RewardedRetryDelaySeconds = 30f;
+        private readonly HashSet<string> _rewardedRetryScheduled = new();
+
+        // AdMob never retried after "No fill", so the placement stayed empty for the whole session.
+        private async UniTaskVoid RetryRewardedLoadAsync(string placementId)
+        {
+            if (!_rewardedRetryScheduled.Add(placementId))
+                return;
+
+            try
+            {
+                await UniTask.Delay(TimeSpan.FromSeconds(RewardedRetryDelaySeconds), ignoreTimeScale: true,
+                    cancellationToken: _lifeTime.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+            finally
+            {
+                _rewardedRetryScheduled.Remove(placementId);
+            }
+
+            LoadRewardedAd(placementId).Forget();
+        }
+
         public async UniTask<bool> IsPlacementAvailable(string placementName)
         {
             if(_placements.TryGetValue(placementName,out var adsPlacementId) == false)

@@ -17,7 +17,7 @@ namespace VN.Game.Modules.unigame.levelplay.AdsCommonProvider
         private IAdsService _serviceWithAvailableAds;
         private Subject<AdsActionData> _adsAction;
         private Dictionary<IAdsService, AdsStatus> _adsAvailableStatus = new ();
-        private float _timeoutAds = 1.5f;
+        private float _timeoutAds = 5f;
         
         public CompositeAdsService(List<IAdsService> services)
         {
@@ -58,7 +58,15 @@ namespace VN.Game.Modules.unigame.levelplay.AdsCommonProvider
                 RequestAds(placementName, service).Forget();
             }
 
-            await UniTask.Delay(TimeSpan.FromSeconds(_timeoutAds));
+            // Return as soon as any provider is ready; a fixed short delay dropped AdMob loads that took >1.5s
+            // and Yandex never got a chance unless it had an ad cached already.
+            var deadline = UnityEngine.Time.realtimeSinceStartup + _timeoutAds;
+            while (UnityEngine.Time.realtimeSinceStartup < deadline &&
+                   !_adsAvailableStatus.Values.Any(x => x == AdsStatus.Ready) &&
+                   _adsAvailableStatus.Values.Any(x => x == AdsStatus.Loading))
+            {
+                await UniTask.Yield();
+            }
 
             foreach (var service in _adsAvailableStatus)
             {
